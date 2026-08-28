@@ -1,9 +1,50 @@
 # 1億円プロジェクト
 
 攒到 1 亿日元的投资进度看板 —— 自动从 Gmail 里读取楽天証券的通知邮件，
-计算真实的资产曲线，并在你偏离计划时用邮件督促你。
+计算真实的资产曲线，并督促你保持每月定投。
 
-跑在 **Google Apps Script + Google Sheets** 上，全部免费，无需服务器。
+有**两个版本**，共用同一套解析与预测代码（`src/Shared.gs`，49 项测试覆盖）：
+
+| | Track 1 · Artifact 看板 | Track 2 · Apps Script |
+|---|---|---|
+| 部署 | **零配置**，打开链接即可 | 需要约 15 分钟手动设置 |
+| 数据来源 | 页面直接调用你的 Gmail / Drive 连接器 | 服务端定时抓取 |
+| 投信（大头） | 实时 | 实时 |
+| 股票 / 汇率 / BTC | 经 Google Sheet 的 GOOGLEFINANCE | 全自动 |
+| 邮件督促 | 无 | 周报 + 月报 |
+| 适合 | 现在就想用 | 想要全自动和邮件提醒 |
+
+Track 1 已经发布可用。Track 2 的代码在 `src/`，随时可以部署，见下方安装步骤。
+
+---
+
+## Track 1 · Artifact 看板
+
+页面通过 `mcp` 运行时能力调用**你自己的** claude.ai 连接器，用你的凭据读数据，
+token 不会暴露给页面。首次同步会把算好的历史固化进页面自身的新版本，
+之后打开是秒开，只增量拉取新邮件。
+
+**你要做的三件事**（都在同一次访问里完成）：
+
+1. 打开 `1億円プロジェクト — データ` 这张 Google 表格
+2. 在 **B3** 粘贴这一行公式并回车 —— 6 个行情一次到位：
+   ```
+   =MAP(A3:A8,LAMBDA(t,IFERROR(GOOGLEFINANCE(t),0)))
+   ```
+3. 填 `野村持株会_評価額`、`ゆうちょ_残高`，以及持有的股数
+
+然后回到看板点「最初の同期を実行」。
+
+> 为什么公式要你自己贴：Drive API 建表时会丢弃公式（实测 `=1+1` 都存不进去），
+> 所以这一格必须在 Sheets 界面里输入一次。`MAP`/`LAMBDA` 让它只需要一格。
+
+> **不需要 bitFlyer API key。** BTC 数量已从你的交易记录算出（0.061912），
+> 价格走 GOOGLEFINANCE。API secret 不该出现在聊天记录或代码库里。
+
+```bash
+npm run build     # 生成 build/dashboard.html
+npm test          # 49 项测试
+```
 
 ---
 
@@ -56,7 +97,7 @@
 
 ---
 
-## 安装步骤
+## Track 2 · Apps Script 安装步骤
 
 ### 1. 建项目并推送代码
 
@@ -147,7 +188,7 @@ Apps Script 编辑器 → 右上「デプロイ」→「新しいデプロイ」
 ## 开发
 
 ```bash
-npm test        # 解析器 + 预测模型的单元测试（32 项，纯 Node，不碰 GAS）
+npm test        # 49 项测试：解析器、预测模型、浏览器兼容性、打包产物的估值逻辑
 clasp push      # 推送到 Apps Script
 ```
 
@@ -158,14 +199,17 @@ clasp push      # 推送到 Apps Script
 - HTML 表格和纯文本两条解析路径结果必须一致
 - 12 月下单、1 月成交的跨年日期
 - 幂等性：同一封邮件重复处理不会重复记账
+- `Shared.gs` 在没有任何 Apps Script 全局变量的环境里能跑（Artifact 的前提）
+- 表格解析保持列位置：`| ゆうちょ_残高 |  | 円 |` 的空值不能把「円」读成金额
 
 ### 文件结构
 
 ```
 src/
-  Config.gs      设置、Sheets 读写、NFKC 名称归一化
+  Shared.gs      ★ 两个版本共用：日期、NFKC 归一化、邮件/表格解析、预测计算
+                   不依赖任何 Apps Script API，浏览器里可直接跑（有测试守住）
+  Config.gs      Apps Script 专用：设置与 Sheets 读写
   Schema.gs      建表与主数据（账户、6 支基金、股票、BTC）
-  Parse.gs       邮件正文 → 结构化数据（纯函数，可在 Node 里测）
   Ingest.gs      Gmail 抓取与幂等写入
   Market.gs      GOOGLEFINANCE 中继 + bitFlyer HMAC 签名
   Holdings.gs    CSV 校准、手动余额
@@ -176,6 +220,13 @@ src/
   Triggers.gs    定时器与表格菜单
   WebApp.gs      Web 应用入口与前端 API
   ui/            看板前端（Chart.js）
+
+artifact/        Track 1 的页面源码
+  app.js         连接器调用、同步、估值、渲染
+  style.css      样式
+  template.html  外壳
+tools/
+  build-artifact.js   把 Shared.gs + app.js 打包成单文件 HTML
 ```
 
 ---

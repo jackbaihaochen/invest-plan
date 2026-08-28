@@ -1,8 +1,11 @@
 /**
- * 1億円投資ダッシュボード — 設定・共通ユーティリティ
+ * Apps Script 固有の設定と Sheets アクセス。
  *
- * データは Google Sheets に保存する。日付は必ず 'yyyy-MM-dd' 文字列で持つ
- * （Date オブジェクトのまま持つとタイムゾーンで1日ずれるため）。
+ * 日付整形・名称正規化・メール解析・予測計算は Shared.gs にある
+ * （ブラウザでも動く必要があるため）。ここには Apps Script の API に
+ * 依存するものだけを置く。
+ *
+ * 日付は必ず 'yyyy-MM-dd' 文字列で持つ（Date のままだと TZ で1日ずれる）。
  */
 
 var TZ = 'Asia/Tokyo';
@@ -32,9 +35,6 @@ var HEADERS = {
   EmailLog: ['gmail_message_id', 'processed_at', 'handler'],
   _gfinance: ['ticker', 'value', 'formula_note']
 };
-
-/** 投資信託の基準価額は「1万口あたり」で表示される。 */
-var FUND_UNIT_BASIS = 10000;
 
 // ---------------------------------------------------------------- spreadsheet
 
@@ -126,100 +126,6 @@ function setSetting_(key, value, note) {
     }
   }
   sh.appendRow([key, value, note || '']);
-}
-
-// ---------------------------------------------------------------- text utils
-
-/**
- * ファンド名の照合キーを作る。
- *
- * 楽天証券のメールは全角と半角が混在する（「eMAXIS　Slim」の全角スペース、
- * 「Ｓ＆Ｐ５００」の全角英数、「（）」の全角括弧）。NFKC 正規化で半角に寄せ、
- * 空白を全て落とし、大文字化して比較する。
- *
- *   'eMAXIS　Slim　米国株式（Ｓ＆Ｐ５００）' -> 'EMAXISSLIM米国株式(S&P500)'
- */
-function normalizeName_(s) {
-  return String(s == null ? '' : s)
-    .normalize('NFKC')
-    .replace(/[\s　]+/g, '')
-    .toUpperCase();
-}
-
-/**
- * 正規化済みテキストに nav_key が含まれる instrument を返す。
- *
- * 完全一致にしないのは、同じファンドでもメールごとに後置文字列が違うため:
- *   基準価額メール: 'eMAXIS Slim 全世界株式（オール・カントリー） (三菱ＵＦＪ…)'
- *   約定メール:     'eMAXIS Slim 全世界株式(オール・カントリー)(オルカン)'
- * 共通の前半部分を nav_key に置き、包含判定する。
- * 複数該当した場合は nav_key が最長のものを採用する。
- */
-function matchInstrument_(rawName, instruments) {
-  var norm = normalizeName_(rawName);
-  var best = null;
-  for (var i = 0; i < instruments.length; i++) {
-    var key = instruments[i].navKey;
-    if (!key) continue;
-    if (norm.indexOf(key) !== -1) {
-      if (!best || key.length > best.navKey.length) best = instruments[i];
-    }
-  }
-  return best;
-}
-
-/** 「19,215円」「100,000円」→ 数値。マイナスや符号も扱う。 */
-function parseYen_(s) {
-  var m = String(s).replace(/[,\s　]/g, '').match(/(-?\+?[\d.]+)/);
-  if (!m) return null;
-  var n = Number(m[1].replace('+', ''));
-  return isNaN(n) ? null : n;
-}
-
-// ---------------------------------------------------------------- date utils
-
-function todayStr_() {
-  return Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd');
-}
-
-function dateStr_(d) {
-  return Utilities.formatDate(d, TZ, 'yyyy-MM-dd');
-}
-
-/** 'yyyy-MM-dd' -> Date (JST 正午。DST/境界事故を避けるため正午に置く) */
-function parseDateStr_(s) {
-  var p = String(s).split('-');
-  return new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2]), 12, 0, 0);
-}
-
-/**
- * 「08月27日」のように年が無い日付を、基準となる日付から補完する。
- * 12月のメールを1月に受信するような年跨ぎを考慮する。
- */
-function resolveYear_(month, day, referenceDate) {
-  var refY = Number(Utilities.formatDate(referenceDate, TZ, 'yyyy'));
-  var refM = Number(Utilities.formatDate(referenceDate, TZ, 'MM'));
-  var year = refY;
-  if (month === 12 && refM === 1) year = refY - 1;
-  else if (month === 1 && refM === 12) year = refY + 1;
-  return Utilities.formatString('%s-%s-%s',
-    year,
-    ('0' + month).slice(-2),
-    ('0' + day).slice(-2));
-}
-
-function addMonthsStr_(dateStr, months) {
-  var d = parseDateStr_(dateStr);
-  d.setMonth(d.getMonth() + months);
-  return dateStr_(d);
-}
-
-function monthKey_(dateStr) {
-  return String(dateStr).slice(0, 7);
-}
-
-function yen_(n) {
-  return Math.round(Number(n) || 0).toLocaleString('ja-JP');
 }
 
 // ------------------------------------------------------------- email log

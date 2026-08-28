@@ -2,7 +2,7 @@ const assert = require('assert');
 const { loadGas } = require('./shim');
 const F = require('./fixtures');
 
-const ctx = loadGas(['Config.gs', 'Parse.gs']);
+const ctx = loadGas(['Shared.gs']);
 const { parseNavEmail_, parseTxEmail_, parseDividendEmail_, normalizeName_, matchInstrument_ } = ctx;
 
 const INSTRUMENTS = F.INSTRUMENT_SEED.map(([id, navKey]) => ({ id, navKey: normalizeName_(navKey) }));

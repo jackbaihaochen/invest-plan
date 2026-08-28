@@ -2,3 +2,6 @@
 .clasp.json
 .clasprc.json
 node_modules/
+
+# ビルド生成物（build-artifact.js が作る）
+build/

@@ -10,17 +10,6 @@ function emailStyles_() {
     + 'background:#0f1216;color:#e8edf3;padding:24px;border-radius:12px;max-width:560px;';
 }
 
-function jpyText_(n) {
-  n = Math.round(Number(n) || 0);
-  var sign = n < 0 ? '-' : '';
-  n = Math.abs(n);
-  var oku = Math.floor(n / 100000000);
-  var man = Math.floor((n % 100000000) / 10000);
-  if (oku) return sign + oku + '億' + (man ? man.toLocaleString('ja-JP') + '万' : '') + '円';
-  if (man) return sign + man.toLocaleString('ja-JP') + '万円';
-  return sign + n.toLocaleString('ja-JP') + '円';
-}
-
 function bar_(pctVal, color) {
   var w = Math.max(0, Math.min(100, pctVal));
   return '<div style="background:#1e252e;border-radius:6px;height:10px;overflow:hidden;margin:8px 0;">'
@@ -50,7 +39,7 @@ function coachLine_(c) {
   }
   var extra = Math.max(0, c.monthlyTarget - c.pace);
   return '計画より <b style="color:#f87171;">' + c.delayHuman + '遅れ</b>。'
-    + '毎月あと <b>' + jpyText_(extra) + '</b> 積み増せば計画に戻る。';
+    + '毎月あと <b>' + jpyLabel_(extra) + '</b> 積み増せば計画に戻る。';
 }
 
 function buildReport_(c, title, extraRows) {
@@ -61,28 +50,28 @@ function buildReport_(c, title, extraRows) {
     + '<div style="font-size:11px;color:#93a1b3;letter-spacing:.08em;">1億円プロジェクト</div>'
     + '<h2 style="margin:6px 0 18px;font-size:18px;">' + title + '</h2>'
 
-    + '<div style="font-size:32px;font-weight:700;letter-spacing:-.02em;">' + jpyText_(c.total) + '</div>'
+    + '<div style="font-size:32px;font-weight:700;letter-spacing:-.02em;">' + jpyLabel_(c.total) + '</div>'
     + '<div style="font-size:13px;color:#93a1b3;margin-top:2px;">'
     + '目標 1億円の <b style="color:#4ade80;">' + c.pct.toFixed(1) + '%</b>'
-    + '　/　あと ' + jpyText_(c.remaining) + '</div>'
+    + '　/　あと ' + jpyLabel_(c.remaining) + '</div>'
     + bar_(c.pct, '#4ade80')
 
     + '<div style="margin:22px 0 8px;font-size:12px;color:#93a1b3;">今月の投入</div>'
     + '<div style="font-size:20px;font-weight:700;color:' + monthColor + ';">'
-    + jpyText_(c.thisMonth) + ' <span style="font-size:13px;color:#93a1b3;font-weight:400;">/ '
-    + jpyText_(c.monthlyTarget) + '</span></div>'
+    + jpyLabel_(c.thisMonth) + ' <span style="font-size:13px;color:#93a1b3;font-weight:400;">/ '
+    + jpyLabel_(c.monthlyTarget) + '</span></div>'
     + bar_(c.thisMonthPct, monthColor)
     + (c.thisMonthShort > 0
-        ? '<div style="font-size:13px;color:#fbbf24;">あと ' + jpyText_(c.thisMonthShort) + '</div>'
+        ? '<div style="font-size:13px;color:#fbbf24;">あと ' + jpyLabel_(c.thisMonthShort) + '</div>'
         : '<div style="font-size:13px;color:#4ade80;">今月は達成 ✓</div>')
 
     + '<table style="width:100%;margin:22px 0 0;border-top:1px solid #2a323d;">'
-    + row_('現在のペース（近6ヶ月平均）', jpyText_(c.pace) + '/月')
+    + row_('現在のペース（近6ヶ月平均）', jpyLabel_(c.pace) + '/月')
     + row_('そのペースでの到達', c.paceEtaLabel + '（' + c.paceEtaHuman + '）', '#fbbf24')
     + row_('計画どおりなら', c.targetEtaLabel + '（' + c.targetEtaHuman + '）', '#60a5fa')
     + (extraRows || '')
     + row_('連続達成', c.streak + ' ヶ月')
-    + row_('投信の運用益', (c.gain >= 0 ? '+' : '') + jpyText_(c.gain), c.gain >= 0 ? '#4ade80' : '#f87171')
+    + row_('投信の運用益', (c.gain >= 0 ? '+' : '') + jpyLabel_(c.gain), c.gain >= 0 ? '#4ade80' : '#f87171')
     + '</table>'
 
     + '<div style="margin-top:20px;padding:14px;background:#1e252e;border-radius:10px;font-size:13px;line-height:1.7;">'
@@ -103,8 +92,8 @@ function buildReport_(c, title, extraRows) {
 function sendWeeklyReport() {
   var c = computeCoaching();
   var cfg = getSettings_();
-  var subject = '【1億円】' + c.pct.toFixed(1) + '% · ' + jpyText_(c.total)
-    + '（今月 ' + jpyText_(c.thisMonth) + '/' + jpyText_(c.monthlyTarget) + '）';
+  var subject = '【1億円】' + c.pct.toFixed(1) + '% · ' + jpyLabel_(c.total)
+    + '（今月 ' + jpyLabel_(c.thisMonth) + '/' + jpyLabel_(c.monthlyTarget) + '）';
   MailApp.sendEmail({
     to: cfg.notifyEmail || Session.getActiveUser().getEmail(),
     subject: subject,
@@ -124,11 +113,11 @@ function sendMonthlyReport() {
   var achieved = lastAmount >= c.monthlyTarget;
 
   var extra = row_(lastKey + ' の投入',
-    jpyText_(lastAmount) + (achieved ? ' ✓' : ' ✗'),
+    jpyLabel_(lastAmount) + (achieved ? ' ✓' : ' ✗'),
     achieved ? '#4ade80' : '#f87171');
 
   var subject = '【1億円】' + lastKey + ' 締め · '
-    + (achieved ? '目標達成 ✓' : '未達 ' + jpyText_(c.monthlyTarget - lastAmount) + '不足');
+    + (achieved ? '目標達成 ✓' : '未達 ' + jpyLabel_(c.monthlyTarget - lastAmount) + '不足');
 
   MailApp.sendEmail({
     to: cfg.notifyEmail || Session.getActiveUser().getEmail(),

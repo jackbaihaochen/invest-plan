@@ -3,7 +3,8 @@
   "private": true,
   "description": "1億円投資ダッシュボード (Google Apps Script + Sheets)",
   "scripts": {
-    "test": "node tests/parse.test.js && node tests/projection.test.js",
-    "push": "clasp push"
+    "test": "node tests/parse.test.js && node tests/projection.test.js && node tests/browser-safety.test.js && npm run build && node tests/compute.test.js",
+    "push": "clasp push",
+    "build": "node tools/build-artifact.js"
   }
 }

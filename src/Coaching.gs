@@ -37,12 +37,6 @@ function logContribution(dateStr, accountId, amount, note) {
   return { date: dateStr || todayStr_(), amount: Math.round(amt) };
 }
 
-function prevMonthKey_(key, back) {
-  var p = key.split('-');
-  var d = new Date(Number(p[0]), Number(p[1]) - 1 - back, 1);
-  return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2);
-}
-
 /**
  * 直近 n ヶ月（当月を除く完了済みの月）の平均投入額。
  * 当月を含めると月初は必ず「ペースが落ちた」と誤判定するため除外する。

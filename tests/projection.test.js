@@ -1,7 +1,7 @@
 const assert = require('assert');
 const { loadGas } = require('./shim');
 
-const ctx = loadGas(['Config.gs', 'Projection.gs']);
+const ctx = loadGas(['Shared.gs']);
 const { futureValue_, monthsToGoal_, requiredMonthly_, coastAmount_, humanMonths_, realValue_ } = ctx;
 
 const CURRENT = 13000000;   // 現在の資産
