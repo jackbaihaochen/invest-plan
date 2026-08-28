@@ -25,6 +25,10 @@
   var $ = function (s, r) { return (r || document).querySelector(s); };
   var state = null;
   var mcp = null;
+  // 'pending' | 'ready' | 'readonly'
+  // readonly は「コネクタに届かない」状態。URL を直接開いた場合がこれで、
+  // 契約上 use() は null を返す（能力はビューアに framed されたときだけ動く）。
+  var mcpState = 'pending';
   var artifactApi = null;
   var charts = {};
   var mcTimer = null;
@@ -383,10 +387,29 @@
   var notes = [];
   function note(msg, kind) {
     notes.push({ msg: msg, kind: kind || 'ok' });
+    renderNotes();
+  }
+  function renderNotes() {
     var box = $('#notes');
-    if (box) box.innerHTML = notes.map(function (n) {
-      return '<div class="' + n.kind + '">' + esc(n.msg) + '</div>';
-    }).join('');
+    if (!box) return;
+    box.innerHTML = (mcpState === 'readonly' ? readonlyBanner() : '')
+      + notes.map(function (n) {
+          return '<div class="' + n.kind + '">' + esc(n.msg) + '</div>';
+        }).join('');
+  }
+
+  /**
+   * URL を直接開いたときの案内。
+   * この状態でも保存済みの数字は全部出るので、画面は殺さず注意書きだけ足す。
+   */
+  function readonlyBanner() {
+    return '<div class="err"><b>読み取り専用モード</b><br>'
+      + 'この開き方では Gmail に接続できないため、表示は'
+      + (state.lastSync ? '<b>' + esc(state.lastSync) + ' に同期した内容</b>' : '未同期の初期状態')
+      + 'のままです。<br><br>'
+      + '更新するには <b>claude.ai にログインした状態で</b>このページを開いてください'
+      + '（スマホならブラウザで claude.ai → Artifacts → このページ）。'
+      + 'アプリのインストールは不要です。</div>';
   }
 
   // ---------------------------------------------------------------- rendering
@@ -397,6 +420,7 @@
     var ready = c.hasNav && state.tx.length > 0;
 
     $('#root').innerHTML = ready ? dashboardHtml(c, s) : setupHtml(c);
+    renderNotes();
     wire(c, s);
     if (ready) { drawCharts(c); whatIf(c, s); }
   }
@@ -706,7 +730,19 @@
 
   function wire(c, s) {
     var btn = $('#sync');
-    if (btn) btn.addEventListener('click', runSync);
+    if (!btn) return;
+    if (mcpState === 'readonly') {
+      btn.disabled = true;
+      btn.textContent = '同期できません';
+      btn.title = 'claude.ai 上で開くと同期できます';
+      return;
+    }
+    if (mcpState === 'pending') {
+      btn.disabled = true;
+      btn.textContent = '接続中…';
+      return;
+    }
+    btn.addEventListener('click', runSync);
   }
 
   function progress(i, n, label) {
@@ -766,14 +802,19 @@
   state.seenIds = state.seenIds || [];
   state.sheet = state.sheet || {};
 
-  render();
-
-  // 能力は後から解決する。使えなくても画面は動く（読み取り専用になるだけ）。
+  // 能力は必ず後から解決する（同期的な最初の実行中には絶対に来ない）。
+  // まず保存済みデータだけで描き、解決したら描き直す。
   if (window.claude && typeof window.claude.use === 'function') {
+    render();
     window.claude.use('mcp').then(function (m) {
       mcp = m;
-      if (!m) note('コネクタが利用できないため、表示は保存済みデータのみです。', 'err');
-    }).catch(function () {});
+      mcpState = m ? 'ready' : 'readonly';
+      render();
+    }).catch(function () { mcpState = 'readonly'; render(); });
     window.claude.use('artifact').then(function (a) { artifactApi = a; }).catch(function () {});
+  } else {
+    // window.claude すら無い＝ビューア外のコピー。
+    mcpState = 'readonly';
+    render();
   }
 })();
