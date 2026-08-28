@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <?!= include('ui/style.css'); ?>
+</head>
+<body>
+<div id="app">
+  <div id="loading" class="loading">
+    <div class="spinner"></div>
+    <p>正在读取楽天証券メール与市况数据…</p>
+  </div>
+
+  <main id="main" hidden>
+    <header class="topbar">
+      <div>
+        <h1>1億円プロジェクト</h1>
+        <p class="sub" id="asOf"></p>
+      </div>
+      <button id="refresh" class="ghost">立即更新</button>
+    </header>
+
+    <!-- 1. 进度 -->
+    <section class="card hero">
+      <div class="ring-wrap">
+        <svg viewBox="0 0 200 200" class="ring" aria-hidden="true">
+          <circle cx="100" cy="100" r="86" class="ring-bg"></circle>
+          <circle cx="100" cy="100" r="86" class="ring-fg" id="ringFg"></circle>
+        </svg>
+        <div class="ring-center">
+          <span class="ring-pct" id="pct">—</span>
+          <span class="ring-label">到 1億円</span>
+        </div>
+      </div>
+      <div class="hero-figures">
+        <div class="figure">
+          <span class="k">现在资产</span>
+          <strong class="v" id="total">—</strong>
+          <span class="delta" id="changeMonth"></span>
+        </div>
+        <div class="figure">
+          <span class="k">还差</span>
+          <strong class="v dim" id="remaining">—</strong>
+        </div>
+        <div class="figure">
+          <span class="k">投信の運用益</span>
+          <strong class="v" id="gain">—</strong>
+          <span class="delta" id="gainPct"></span>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. 核心：进度落后多少 -->
+    <section class="card verdict" id="verdict">
+      <div class="verdict-main">
+        <span class="k">按<em>当前实际节奏</em>（近6个月平均 <span id="paceAmt">—</span>/月）</span>
+        <strong class="eta" id="paceEta">—</strong>
+      </div>
+      <div class="verdict-gap" id="gapBox">
+        <span class="gap-label" id="gapLabel">—</span>
+        <strong class="gap-value" id="gapValue">—</strong>
+      </div>
+      <div class="verdict-main">
+        <span class="k">按<em>计划</em>（<span id="targetAmt">—</span>/月）</span>
+        <strong class="eta plan" id="targetEta">—</strong>
+      </div>
+    </section>
+
+    <!-- 3. 本月 -->
+    <section class="card">
+      <div class="row-between">
+        <h2>本月投入</h2>
+        <span class="streak" id="streak"></span>
+      </div>
+      <div class="bar"><div class="bar-fill" id="monthBar"></div></div>
+      <div class="row-between small">
+        <span id="monthText">—</span>
+        <span id="monthShort" class="warn"></span>
+      </div>
+      <p class="note" id="requiredNote"></p>
+    </section>
+
+    <!-- 4. 走势 -->
+    <section class="card">
+      <h2>资产推移 <span class="tag" id="estTag" hidden>含推定值</span></h2>
+      <canvas id="historyChart" height="220"></canvas>
+      <p class="note">実線＝評価額、点線＝投信の投入元本。両者の差が運用益。</p>
+    </section>
+
+    <!-- 5. 内訳 + 月次投入 -->
+    <div class="grid2">
+      <section class="card">
+        <h2>口座別内訳</h2>
+        <div id="breakdown" class="breakdown"></div>
+        <div id="staleWarn"></div>
+      </section>
+      <section class="card">
+        <h2>月次投入額</h2>
+        <canvas id="contribChart" height="200"></canvas>
+      </section>
+    </div>
+
+    <!-- 6. 预测 -->
+    <section class="card">
+      <h2>将来予測</h2>
+      <div class="slider-row">
+        <label for="whatif">毎月の積立額</label>
+        <input type="range" id="whatif" min="0" max="800000" step="10000">
+        <output id="whatifVal"></output>
+      </div>
+      <div class="whatif-result" id="whatifResult"></div>
+      <canvas id="forecastChart" height="240"></canvas>
+      <p class="note">
+        帯は 2,000 回のモンテカルロ試行による 10〜90 パーセンタイル。年率 <span id="mu"></span>、
+        ボラティリティ <span id="sigma"></span> を仮定。<strong>7% は平均であって保証ではない</strong>。
+      </p>
+    </section>
+
+    <!-- 7. 里程碑 -->
+    <section class="card">
+      <h2>マイルストーン</h2>
+      <div id="milestones" class="milestones"></div>
+    </section>
+
+    <!-- 8. 注意事项 -->
+    <section class="card caveats">
+      <h2>把这些记在心里</h2>
+      <ul id="caveats"></ul>
+    </section>
+
+    <!-- 9. 录入 -->
+    <section class="card">
+      <h2>手动录入</h2>
+      <div class="forms">
+        <form id="balanceForm" class="form">
+          <h3>口座残高</h3>
+          <select id="balAccount"></select>
+          <input type="number" id="balAmount" placeholder="残高（円）" required>
+          <button type="submit">保存</button>
+        </form>
+        <form id="contribForm" class="form">
+          <h3>メールに出ない投入</h3>
+          <input type="date" id="contribDate">
+          <input type="number" id="contribAmount" placeholder="金額（円）" required>
+          <input type="text" id="contribNote" placeholder="メモ（個別株の買付など）">
+          <button type="submit">追加</button>
+        </form>
+        <form id="csvForm" class="form wide">
+          <h3>保有商品一覧 CSV</h3>
+          <textarea id="csvText" rows="4" placeholder="楽天証券からダウンロードした CSV の中身をそのまま貼り付け"></textarea>
+          <button type="submit">取り込んで口数を較正</button>
+          <p class="note" id="csvResult"></p>
+        </form>
+      </div>
+    </section>
+
+    <p class="footer">数据来源：楽天証券の通知メール・GOOGLEFINANCE・bitFlyer API。<br>投资有风险，此页面仅为个人记录工具，不构成投资建议。</p>
+  </main>
+
+  <div id="error" class="error" hidden></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<?!= include('ui/app.js'); ?>
+</body>
+</html>

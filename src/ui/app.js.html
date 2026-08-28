@@ -1,0 +1,424 @@
+<script>
+(function () {
+  'use strict';
+
+  var DATA = null;
+  var charts = {};
+  var mcTimer = null;
+
+  // ------------------------------------------------------------- formatting
+
+  function jpy(n) {
+    n = Math.round(Number(n) || 0);
+    var sign = n < 0 ? '-' : '';
+    n = Math.abs(n);
+    var oku = Math.floor(n / 100000000);
+    var man = Math.floor((n % 100000000) / 10000);
+    if (oku) return sign + oku + '億' + (man ? man.toLocaleString('ja-JP') + '万' : '') + '円';
+    if (man) return sign + man.toLocaleString('ja-JP') + '万円';
+    return sign + n.toLocaleString('ja-JP') + '円';
+  }
+  function signed(n) { return (n >= 0 ? '+' : '') + jpy(n); }
+  function pct(n) { return (Number(n) || 0).toFixed(1) + '%'; }
+  function el(id) { return document.getElementById(id); }
+
+  function humanMonths(m) {
+    if (m === null || m === undefined) return '到達しません';
+    var y = Math.floor(m / 12), r = m % 12;
+    if (y && r) return y + '年' + r + 'ヶ月';
+    if (y) return y + '年';
+    return r + 'ヶ月';
+  }
+  function etaLabel(months) {
+    if (months === null || months === undefined) return '—';
+    var d = new Date();
+    d.setMonth(d.getMonth() + months);
+    return d.getFullYear() + '年' + (d.getMonth() + 1) + '月';
+  }
+
+  // ------------------------------------------------------------- projection
+
+  function monthsToGoal(current, monthly, annual, goal) {
+    if (current >= goal) return 0;
+    var r = annual / 12, v = current;
+    for (var m = 1; m <= 1200; m++) {
+      v = v * (1 + r) + monthly;
+      if (v >= goal) return m;
+    }
+    return null;
+  }
+
+  function gauss() {
+    var u = 0, v = 0;
+    while (u === 0) u = Math.random();
+    while (v === 0) v = Math.random();
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+  }
+
+  /**
+   * 幾何ブラウン運動による月次シミュレーション。
+   * 年率 mu・ボラティリティ sigma を月次の対数正規に落として回す。
+   */
+  function monteCarlo(current, monthly, mu, sigma, months, paths) {
+    var s = sigma / Math.sqrt(12);
+    var m = Math.log(1 + mu) / 12 - (s * s) / 2;
+    var step = 3;
+    var sampleCount = Math.floor(months / step) + 1;
+    var buckets = [];
+    for (var i = 0; i < sampleCount; i++) buckets.push(new Float64Array(paths));
+
+    for (var p = 0; p < paths; p++) {
+      var v = current, si = 0;
+      buckets[si++][p] = v;
+      for (var t = 1; t <= months; t++) {
+        v = v * Math.exp(m + s * gauss()) + monthly;
+        if (t % step === 0) buckets[si++][p] = v;
+      }
+    }
+
+    function q(arr, k) {
+      var a = Array.prototype.slice.call(arr).sort(function (x, y) { return x - y; });
+      return a[Math.min(a.length - 1, Math.floor(k * a.length))];
+    }
+    return buckets.map(function (b, i) {
+      return { month: i * step, p10: q(b, 0.10), p50: q(b, 0.50), p90: q(b, 0.90) };
+    });
+  }
+
+  // ----------------------------------------------------------------- render
+
+  function render(data) {
+    DATA = data;
+    var c = data.coaching;
+
+    el('asOf').textContent = c.asOf + ' 时点 · 目标 ' + jpy(c.goal);
+
+    // progress ring
+    var circ = 2 * Math.PI * 86;
+    var p = Math.max(0, Math.min(100, c.pct));
+    var ring = el('ringFg');
+    ring.style.strokeDasharray = circ;
+    ring.style.strokeDashoffset = circ;
+    setTimeout(function () { ring.style.strokeDashoffset = circ * (1 - p / 100); }, 60);
+    el('pct').textContent = p.toFixed(1) + '%';
+
+    el('total').textContent = jpy(c.total);
+    el('remaining').textContent = jpy(c.remaining);
+    var cm = el('changeMonth');
+    cm.textContent = '近1个月 ' + signed(c.changeMonth);
+    cm.className = 'delta ' + (c.changeMonth >= 0 ? 'up' : 'down');
+    el('gain').textContent = signed(c.gain);
+    el('gain').className = 'v ' + (c.gain >= 0 ? 'up' : 'down');
+    var gp = el('gainPct');
+    gp.textContent = '元本比 ' + (c.gainPct >= 0 ? '+' : '') + pct(c.gainPct);
+    gp.className = 'delta ' + (c.gain >= 0 ? 'up' : 'down');
+
+    // verdict — the core supervision number
+    el('paceAmt').textContent = jpy(c.pace);
+    el('targetAmt').textContent = jpy(c.monthlyTarget);
+    el('paceEta').textContent = c.paceEtaMonths === null
+      ? 'このペースでは届きません' : etaLabel(c.paceEtaMonths) + '（' + c.paceEtaHuman + '）';
+    el('targetEta').textContent = c.targetEtaMonths === null
+      ? '—' : etaLabel(c.targetEtaMonths) + '（' + c.targetEtaHuman + '）';
+
+    var vb = el('verdict');
+    vb.className = 'card verdict ' + c.delayDirection;
+    if (c.delayDirection === 'behind') {
+      el('gapLabel').textContent = '计划より遅れ';
+      el('gapValue').textContent = c.delayHuman;
+    } else if (c.delayDirection === 'ahead') {
+      el('gapLabel').textContent = '计划より前倒し';
+      el('gapValue').textContent = c.delayHuman;
+    } else if (c.delayDirection === 'on_track') {
+      el('gapLabel').textContent = '順調';
+      el('gapValue').textContent = 'ちょうど計画どおり';
+    } else {
+      el('gapLabel').textContent = '现在のペースでは';
+      el('gapValue').textContent = '到達しません';
+    }
+
+    // this month
+    var mp = Math.min(100, c.thisMonthPct);
+    var bar = el('monthBar');
+    bar.style.width = mp + '%';
+    bar.className = 'bar-fill' + (c.thisMonth >= c.monthlyTarget ? '' : ' short');
+    el('monthText').textContent = jpy(c.thisMonth) + ' / ' + jpy(c.monthlyTarget) + '（' + pct(c.thisMonthPct) + '）';
+    el('monthShort').textContent = c.thisMonthShort > 0 ? 'あと ' + jpy(c.thisMonthShort) : '達成 ✓';
+    el('streak').textContent = c.streak > 0 ? '🔥 连续达标 ' + c.streak + ' 个月' : '连续达标记录：0 个月';
+    el('requiredNote').textContent =
+      '目标期日（' + etaLabel(c.targetEtaMonths) + '）に間に合わせるために今必要な積立額は月 '
+      + jpy(c.requiredMonthly) + '。';
+
+    if (c.estimated) el('estTag').hidden = false;
+
+    renderBreakdown(data);
+    renderStale(data.accounts);
+    renderMilestones(c);
+    renderCaveats(c);
+    historyChart(data.series);
+    contribChart(data.contributions, c.monthlyTarget);
+
+    el('mu').textContent = pct(c.expectedReturn * 100);
+    el('sigma').textContent = pct(c.volatility * 100);
+
+    var slider = el('whatif');
+    slider.value = Math.max(0, Math.min(800000, Math.round(c.monthlyTarget / 10000) * 10000));
+    slider.addEventListener('input', onWhatIf);
+    onWhatIf();
+
+    setupForms(data);
+
+    el('loading').hidden = true;
+    el('main').hidden = false;
+  }
+
+  function renderBreakdown(data) {
+    var total = data.breakdown.reduce(function (s, b) { return s + b.value; }, 0) || 1;
+    var colors = { fund: '#4ade80', stock: '#60a5fa', crypto: '#fbbf24', manual: '#a78bfa' };
+    el('breakdown').innerHTML = data.breakdown.map(function (b) {
+      var w = (b.value / total) * 100;
+      return '<div class="bd-row"><div class="bd-head"><span>' + b.label + '</span>'
+        + '<span>' + jpy(b.value) + ' · ' + w.toFixed(1) + '%</span></div>'
+        + '<div class="bd-bar"><span style="width:' + w + '%;background:' + colors[b.key] + '"></span></div></div>';
+    }).join('');
+  }
+
+  function renderStale(accounts) {
+    var stale = (accounts || []).filter(function (a) { return a.stale; });
+    el('staleWarn').innerHTML = stale.length
+      ? '<div class="stale">⚠ ' + stale.map(function (a) {
+          return a.name + (a.updated ? '（' + a.ageDays + '日前の値）' : '（未入力）');
+        }).join('、') + ' — 下の「手动录入」で更新してください。</div>'
+      : '';
+  }
+
+  function renderMilestones(c) {
+    el('milestones').innerHTML = c.milestones.map(function (m) {
+      return '<div class="ms' + (m.reached ? ' done' : '') + '">'
+        + '<span class="amt">' + m.label + '</span>'
+        + '<span class="st">' + (m.reached ? '達成 ✓' : 'あと ' + jpy(m.amount - c.total)) + '</span></div>';
+    }).join('');
+  }
+
+  function renderCaveats(c) {
+    var nisaUsed = (c.nisa['つみたて投資枠'] || 0) + (c.nisa['成長投資枠'] || 0);
+    var items = [
+      '想定年利 <strong>' + pct(c.expectedReturn * 100) + '</strong> は<strong>米ドル建ての名目</strong>リターン。'
+        + '円建てで見る限り <strong>USD/JPY の変動</strong>を直接受ける（円高は逆風）。',
+      '<strong>特定口座</strong>の譲渡益には <strong>' + pct(c.taxRate * 100) + '</strong> の税金。'
+        + '1億円を<strong>税引後</strong>で持ちたいなら、必要な評価額はさらに上になる。',
+      'NISA生涯投資枠 ' + jpy(c.nisaCap) + ' のうち <strong>' + jpy(nisaUsed) + '</strong> を使用済み'
+        + '（つみたて枠 ' + jpy(c.nisa['つみたて投資枠'] || 0) + ' / 成長枠 ' + jpy(c.nisa['成長投資枠'] || 0) + '）。枠内を優先。',
+      '目標達成時点の 1億円は、インフレを年 ' + pct((c.inflation || 0.01) * 100) + ' と見ると'
+        + '今の <strong>' + jpy(c.goalRealValue) + '</strong> 相当の購買力。',
+      c.coastReached
+        ? '✓ <strong>Coast FIRE 到達</strong>：今後1円も積み立てなくても、複利だけで目標期日に届く水準。'
+        : 'Coast FIRE ライン（積立を止めても目標期日に届く額）は <strong>' + jpy(c.coastAmount) + '</strong>。あと ' + jpy(c.coastAmount - c.total) + '。',
+      '持株会は<strong>給与と自社株が同じ会社に集中</strong>する。会社が傾くと収入と資産が同時に減る点に注意。'
+    ];
+    el('caveats').innerHTML = items.map(function (i) { return '<li>' + i + '</li>'; }).join('');
+  }
+
+  // ----------------------------------------------------------------- charts
+
+  var GRID = { color: 'rgba(255,255,255,.06)' };
+  var TICK = { color: '#93a1b3', font: { size: 10 } };
+
+  function baseOpts(extra) {
+    var o = {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { labels: { color: '#93a1b3', boxWidth: 10, font: { size: 11 } } },
+        tooltip: { callbacks: { label: function (ctx) { return ctx.dataset.label + ': ' + jpy(ctx.parsed.y); } } }
+      },
+      scales: {
+        x: { grid: GRID, ticks: TICK },
+        y: { grid: GRID, ticks: { color: '#93a1b3', font: { size: 10 },
+             callback: function (v) { return (v / 10000).toLocaleString('ja-JP') + '万'; } } }
+      }
+    };
+    return Object.assign(o, extra || {});
+  }
+
+  function historyChart(series) {
+    if (charts.history) charts.history.destroy();
+    charts.history = new Chart(el('historyChart'), {
+      type: 'line',
+      data: {
+        labels: series.map(function (s) { return s.date.slice(2); }),
+        datasets: [
+          { label: '評価額', data: series.map(function (s) { return s.total; }),
+            borderColor: '#4ade80', backgroundColor: 'rgba(74,222,128,.10)',
+            fill: true, tension: .25, pointRadius: 0, borderWidth: 2 },
+          { label: '投信の投入元本', data: series.map(function (s) { return s.principal; }),
+            borderColor: '#93a1b3', borderDash: [5, 4], fill: false, tension: .25,
+            pointRadius: 0, borderWidth: 1.5 }
+        ]
+      },
+      options: baseOpts()
+    });
+  }
+
+  function contribChart(contribs, target) {
+    if (charts.contrib) charts.contrib.destroy();
+    charts.contrib = new Chart(el('contribChart'), {
+      type: 'bar',
+      data: {
+        labels: contribs.map(function (c) { return c.month.slice(2); }),
+        datasets: [
+          { label: '投入額', data: contribs.map(function (c) { return c.amount; }),
+            backgroundColor: contribs.map(function (c) {
+              return c.amount >= target ? '#4ade80' : '#fbbf24';
+            }), borderRadius: 4 },
+          { label: '目標', type: 'line', data: contribs.map(function () { return target; }),
+            borderColor: '#60a5fa', borderDash: [4, 4], borderWidth: 1.5,
+            pointRadius: 0, fill: false }
+        ]
+      },
+      options: baseOpts()
+    });
+  }
+
+  function forecastChart(bands) {
+    if (charts.forecast) charts.forecast.destroy();
+    var goal = DATA.coaching.goal;
+    charts.forecast = new Chart(el('forecastChart'), {
+      type: 'line',
+      data: {
+        labels: bands.map(function (b) { return (b.month / 12).toFixed(1) + '年'; }),
+        datasets: [
+          { label: '楽観 (90%tile)', data: bands.map(function (b) { return b.p90; }),
+            borderColor: 'rgba(74,222,128,.35)', backgroundColor: 'rgba(74,222,128,.10)',
+            fill: '+1', pointRadius: 0, borderWidth: 1, tension: .3 },
+          { label: '中央値 (50%tile)', data: bands.map(function (b) { return b.p50; }),
+            borderColor: '#4ade80', fill: false, pointRadius: 0, borderWidth: 2.5, tension: .3 },
+          { label: '悲観 (10%tile)', data: bands.map(function (b) { return b.p10; }),
+            borderColor: 'rgba(74,222,128,.35)', fill: false, pointRadius: 0, borderWidth: 1, tension: .3 },
+          { label: '目標 1億円', data: bands.map(function () { return goal; }),
+            borderColor: '#f87171', borderDash: [6, 4], fill: false, pointRadius: 0, borderWidth: 1.5 }
+        ]
+      },
+      options: baseOpts()
+    });
+  }
+
+  // ---------------------------------------------------------------- what-if
+
+  function onWhatIf() {
+    var c = DATA.coaching;
+    var monthly = Number(el('whatif').value);
+    el('whatifVal').textContent = jpy(monthly) + '/月';
+
+    var m = monthsToGoal(c.total, monthly, c.expectedReturn, c.goal);
+    var base = c.targetEtaMonths;
+    var diff = (m === null || base === null) ? null : base - m;
+
+    var txt = m === null
+      ? 'この金額では 1億円に到達しません。'
+      : '1億円到達は <strong>' + etaLabel(m) + '</strong>（' + humanMonths(m) + '）。';
+    if (diff !== null && diff !== 0) {
+      txt += diff > 0
+        ? ' 计划（' + jpy(c.monthlyTarget) + '/月）より <strong>' + humanMonths(diff) + '早い</strong>。'
+        : ' 计划より ' + humanMonths(-diff) + '遅い。';
+    }
+    el('whatifResult').innerHTML = txt;
+
+    clearTimeout(mcTimer);
+    mcTimer = setTimeout(function () {
+      var horizon = Math.min(360, Math.max(120, (m || 240) + 24));
+      forecastChart(monteCarlo(c.total, monthly, c.expectedReturn, c.volatility, horizon, 2000));
+    }, 180);
+  }
+
+  // ------------------------------------------------------------------ forms
+
+  function setupForms(data) {
+    var sel = el('balAccount');
+    if (!sel.options.length) {
+      (data.accounts || []).forEach(function (a) {
+        var o = document.createElement('option');
+        o.value = a.accountId;
+        o.textContent = a.name;
+        sel.appendChild(o);
+      });
+    }
+    el('contribDate').value = new Date().toISOString().slice(0, 10);
+  }
+
+  function busy(form, on) {
+    var b = form.querySelector('button');
+    b.disabled = on;
+    b.dataset.label = b.dataset.label || b.textContent;
+    b.textContent = on ? '処理中…' : b.dataset.label;
+  }
+
+  function wire(formId, handler) {
+    el(formId).addEventListener('submit', function (e) {
+      e.preventDefault();
+      var form = e.target;
+      busy(form, true);
+      handler(form, function () { busy(form, false); });
+    });
+  }
+
+  function onData(cb) {
+    return function (res) { cb(); render(res); };
+  }
+  function onFail(cb) {
+    return function (err) {
+      cb();
+      el('error').hidden = false;
+      el('error').textContent = 'エラー: ' + (err && err.message ? err.message : err);
+    };
+  }
+
+  wire('balanceForm', function (form, done) {
+    google.script.run.withSuccessHandler(onData(done)).withFailureHandler(onFail(done))
+      .saveManualBalance(el('balAccount').value, el('balAmount').value, '');
+    el('balAmount').value = '';
+  });
+
+  wire('contribForm', function (form, done) {
+    google.script.run.withSuccessHandler(onData(done)).withFailureHandler(onFail(done))
+      .saveContribution(el('contribDate').value, 'rakuten', el('contribAmount').value, el('contribNote').value);
+    el('contribAmount').value = '';
+    el('contribNote').value = '';
+  });
+
+  wire('csvForm', function (form, done) {
+    google.script.run
+      .withSuccessHandler(function (res) {
+        done();
+        el('csvResult').textContent =
+          '照合 ' + res.result.matched.length + ' 件' +
+          (res.result.skipped.length ? ' / 未照合 ' + res.result.skipped.join('、') : '') +
+          (res.result.costTotal ? ' / 取得金額合計 ' + jpy(res.result.costTotal) : '');
+        render(res.dashboard);
+      })
+      .withFailureHandler(onFail(done))
+      .uploadHoldingsCsv(el('csvText').value);
+  });
+
+  el('refresh').addEventListener('click', function () {
+    var b = el('refresh');
+    b.disabled = true; b.textContent = '更新中…';
+    google.script.run
+      .withSuccessHandler(function (d) { b.disabled = false; b.textContent = '立即更新'; render(d); })
+      .withFailureHandler(onFail(function () { b.disabled = false; b.textContent = '立即更新'; }))
+      .refreshNow();
+  });
+
+  // ------------------------------------------------------------------- boot
+
+  google.script.run
+    .withSuccessHandler(render)
+    .withFailureHandler(function (err) {
+      el('loading').hidden = true;
+      el('error').hidden = false;
+      el('error').innerHTML = '読み込みに失敗しました: ' + (err && err.message ? err.message : err)
+        + '<br><br>初回は Apps Script エディタで <code>setupSheets()</code> → <code>backfillAll()</code> を実行してください。';
+    })
+    .getDashboard();
+})();
+</script>
