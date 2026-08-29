@@ -252,34 +252,40 @@ tools/
 
 ---
 
-## Track 0 — 手動入力の Google スプレッドシート（いま一番おすすめ）
+## Track 0 — 手动输入的 Google 表格（当前推荐）
 
-Gmail 解析も API も使わず、**自分で数字を入れる**いちばん確実なやり方。
-`tools/build-sheet.py` が 4 タブのワークブックを生成する。
+不解析 Gmail、不调 API，自己填数字。`tools/build-sheet.py` 生成一个 4 页的工作簿。
 
 ```bash
 pip install openpyxl
 python3 tools/build-sheet.py build/1oku.xlsx
-python3 tools/check-sheet.py build/1oku.xlsx   # 数式の機械チェック
+python3 tools/check-sheet.py build/1oku.xlsx   # 公式的机械检查
 ```
 
-| タブ | 書く頻度 | 書くこと |
+| 页 | 频率 | 要填什么 |
 |---|---|---|
-| ダッシュボード | — | 見るだけ（全部自動計算） |
-| 入金ログ | 投資したとき | 日付・口座・金額 の3つ |
-| 月次残高 | 月1回 | 4口座の残高 |
-| 設定 | 最初だけ | 目標・毎月の目標額・想定年利・開始元本 |
+| 总览 | — | 只看，全自动 |
+| 持仓明细 | 每季度 | 每个标的的评价额；名称/类别/账户已按实际持仓预填 |
+| 月次记录 | 每月 | 两个数：总资产、本月投入 |
+| 设置 | 只填一次 | 目标、每月目标额、预期年化、起始本金 |
 
-### なぜ .xlsx で配るのか
+### 为什么做成 .xlsx 而不是直接建表
 
-Drive コネクタ経由でスプレッドシートを作ると **数式が消える**（`=1+1` すら空になる。
-CSV 変換・xlsx 変換の両方で確認済み）。Google スプレッドシートの
-インポーターを通す必要があるため、.xlsx を書き出して手動で取り込んでもらう。
+通过 Drive 连接器创建表格会**丢掉所有公式**（连 `=1+1` 都变成空白，CSV
+和 xlsx 两种转换都验过）。必须走 Google 表格自己的导入器，所以导出
+.xlsx 由用户手动导入。
 
-取り込み方: Drive にドラッグ → ダブルクリック → `ファイル > Google スプレッドシートとして保存`
+导入方式：拖进 Drive → 双击 → `文件 > 另存为 Google 表格`
 
-### 使っている関数
+### 用到的函数
 
-Excel と Google スプレッドシートの両方に存在するものだけ（`check-sheet.py` が検査する）。
-`SPARKLINE` や `ARRAYFORMULA` などの Google 専用関数は、xlsx 経由で壊れるので使っていない。
-バーは `REPT("█",n)` で描いている。
+只用 Excel 和 Google 表格都有的（`check-sheet.py` 会检查）。`SPARKLINE`、
+`ARRAYFORMULA` 这类 Google 专有函数过 xlsx 会碎，一律不用；进度条是
+`REPT("█",n)` 画的。
+
+### 预填的数据来自哪里
+
+`HOLDINGS` 和 `PAST` 两个常量是从用户导出的楽天証券取引履歴
+（`adjusthistoryJP` / `adjusthistoryUS`，CP932 编码）还原的：持仓标的列表、
+所属账户，以及近 12 个月对楽天証券的净入金。注意那两个 CSV 是**交易流水**，
+不是持仓快照 —— 评价额仍需手工填。

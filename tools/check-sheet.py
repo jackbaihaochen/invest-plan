@@ -10,7 +10,7 @@ from openpyxl import load_workbook
 ALLOWED = {  # Excel と Google スプレッドシートの両方に存在する関数だけ
  "IF","IFERROR","SUM","SUMIFS","AVERAGEIF","COUNTIF","COUNT","MIN","MAX","ROUND",
  "ROUNDUP","INT","MOD","TEXT","DATE","YEAR","MONTH","TODAY","EOMONTH","EDATE",
- "REPT","LOOKUP","NPER","ROW",
+ "REPT","LOOKUP","NPER","ROW","AVERAGE","AVERAGEIFS","COUNTIFS","SUMIF","OR","AND",
 }
 
 wb = load_workbook(sys.argv[1])
@@ -56,7 +56,7 @@ if bad:
     print(f"\n❌ {len(bad)} 件")
     seen = set()
     for w, why, f in bad:
-        k = (why, f[:60])
+        k = why
         if k in seen:
             continue
         seen.add(k)
