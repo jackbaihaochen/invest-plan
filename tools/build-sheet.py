@@ -36,46 +36,50 @@ M_IN  = f"'{S_MON}'!$C$3:$C${MONTHS+2}"
 M_PRI = f"'{S_MON}'!$D$3:$D${MONTHS+2}"
 M_STK = f"'{S_MON}'!$G$3:$G${MONTHS+2}"
 H_CAT = f"'{S_HOLD}'!$B$3:$B${HOLDS+2}"
-H_VAL = f"'{S_HOLD}'!$E$3:$E${HOLDS+2}"
-H_CST = f"'{S_HOLD}'!$F$3:$F${HOLDS+2}"
 H_ACC = f"'{S_HOLD}'!$C$3:$C${HOLDS+2}"
+H_VAL = f"'{S_HOLD}'!$J$3:$J${HOLDS+2}"
+H_CST = f"'{S_HOLD}'!$K$3:$K${HOLDS+2}"
+FX    = f"'{S_CFG}'!$B$8"
 
 CATS = ["指数基金", "美股个股", "日本个股", "黄金",
         "现金·MMF", "加密货币", "持株会", "银行存款"]
 ACCTS = ["NISAつみたて投資枠", "NISA成長投資枠", "特定口座", "一般口座", "其他"]
 
-# 楽天証券「保有商品詳細」2026/08/29 时点的实际持仓（評価額 / 取得原価）
+# 楽天証券「保有商品詳細」2026/08/29。数量と取得原価は確定値、価格は当日値（GOOGLEFINANCE が効けば上書きされる）
+# (名称, 类别, 账户, 币种, 代码, 数量, 倍率, 手动价, 成本)
+NISA_T, NISA_G, TOKUTEI, OTHER = "NISAつみたて投資枠", "NISA成長投資枠", "特定口座", "其他"
+JPY, USD = "日元", "美元"
 HOLDINGS = [
-    ("楽天・プラス・S&P500",        "指数基金", "NISAつみたて投資枠", "日元", 3053416, 2200000),
-    ("楽天・プラス・S&P500",        "指数基金", "NISA成長投資枠",     "日元", 3834848, 2559723),
-    ("楽天・プラス・S&P500",        "指数基金", "NISA成長投資枠",     "日元",   70501,   50000),
-    ("eMAXIS Slim オルカン",        "指数基金", "NISA成長投資枠",     "日元",  807113,  619402),
-    ("eMAXIS Slim オルカン",        "指数基金", "NISAつみたて投資枠", "日元",  642035,  600000),
-    ("iFreeNEXT FANG+",             "指数基金", "NISA成長投資枠",     "日元",  399842,  350000),
-    ("eMAXIS Slim 米国株式(S&P500)", "指数基金", "NISA成長投資枠",    "日元",  159856,  100000),
-    ("楽天・プラス・NASDAQ-100",     "指数基金", "NISA成長投資枠",    "日元",   19272,   20000),
-    ("NVDA エヌビディア",           "美股个股", "NISA成長投資枠",     "美元",  591957,  338145),
-    ("GOOG アルファベットC",        "美股个股", "NISA成長投資枠",     "美元",  548813,  265576),
-    ("CRCL サークル",               "美股个股", "特定口座",           "美元",  251057,  273264),
-    ("MSFT マイクロソフト",         "美股个股", "NISA成長投資枠",     "美元",  164391,  127332),
-    ("MSFT マイクロソフト",         "美股个股", "特定口座",           "美元",   82195,   60687),
-    ("AMZN アマゾン",               "美股个股", "NISA成長投資枠",     "美元",   85289,   63981),
-    ("AMZN アマゾン",               "美股个股", "特定口座",           "美元",   42644,   23722),
-    ("AMD",                         "美股个股", "NISA成長投資枠",     "美元",   74520,   19102),
-    ("TSM タイワンセミ",            "美股个股", "NISA成長投資枠",     "美元",   66828,   65928),
-    ("AAPL アップル",               "美股个股", "NISA成長投資枠",     "美元",   51171,   25715),
-    ("CLS セレスティカ",            "美股个股", "NISA成長投資枠",     "美元",   47809,   60368),
-    ("VRT バーティブ",              "美股个股", "NISA成長投資枠",     "美元",   41148,   54219),
-    ("6787 メイコー",               "日本个股", "NISA成長投資枠",     "日元",   56280,  108763),
-    ("4385 メルカリ",               "日本个股", "NISA成長投資枠",     "日元",   32319,   13825),
-    ("3492 ＭＩＲＡＲＴＨ (REIT)",   "日本个股", "NISA成長投資枠",    "日元",   79000,   92300),
-    ("金 現物 72.24958g",           "黄金",     "其他",               "日元", 1694398, 1245041),
-    ("425A ＧＸゴールド",           "黄金",     "NISA成長投資枠",     "日元",  148542,  148610),
-    ("楽天・米ドルMMF",             "现金·MMF", "特定口座",           "美元",    4969,    4934),
-    ("楽天証券 預り金",             "现金·MMF", "其他",               "日元",    3478,    3478),
-    ("bitFlyer BTC 0.061912",       "加密货币", "其他",               "日元",    None,  893703),
-    ("野村 持株会",                 "持株会",   "其他",               "日元",    None,    None),
-    ("ゆうちょ銀行",                "银行存款", "其他",               "日元",    None,    None),
+    ("楽天・プラス・S&P500",         "指数基金", NISA_T,  JPY, "", 1513390, 10000,  20176, 2200000),
+    ("楽天・プラス・S&P500",         "指数基金", NISA_G,  JPY, "", 1900698, 10000,  20176, 2559723),
+    ("楽天・プラス・S&P500",         "指数基金", NISA_G,  JPY, "",   34943, 10000,  20176,   50000),
+    ("eMAXIS Slim オルカン",         "指数基金", NISA_G,  JPY, "",  207794, 10000,  38842,  619402),
+    ("eMAXIS Slim オルカン",         "指数基金", NISA_T,  JPY, "",  165294, 10000,  38842,  600000),
+    ("iFreeNEXT FANG+",              "指数基金", NISA_G,  JPY, "",   39902, 10000, 100206,  350000),
+    ("eMAXIS Slim 米国株式(S&P500)",  "指数基金", NISA_G,  JPY, "",   35254, 10000,  45344,  100000),
+    ("楽天・プラス・NASDAQ-100",      "指数基金", NISA_G,  JPY, "",   10155, 10000,  18978,   20000),
+    ("NVDA エヌビディア",            "美股个股", NISA_G,  USD, "NASDAQ:NVDA", 17, 1, 217.55, 338145),
+    ("GOOG アルファベットC",         "美股个股", NISA_G,  USD, "NASDAQ:GOOG", 10, 1, 342.88, 265576),
+    ("CRCL サークル",                "美股个股", TOKUTEI, USD, "NYSE:CRCL",   18, 1,  87.14, 273264),
+    ("MSFT マイクロソフト",          "美股个股", NISA_G,  USD, "NASDAQ:MSFT",  2, 1, 513.53, 127332),
+    ("MSFT マイクロソフト",          "美股个股", TOKUTEI, USD, "NASDAQ:MSFT",  1, 1, 513.53,  60687),
+    ("AMZN アマゾン",                "美股个股", NISA_G,  USD, "NASDAQ:AMZN",  2, 1, 266.43,  63981),
+    ("AMZN アマゾン",                "美股个股", TOKUTEI, USD, "NASDAQ:AMZN",  1, 1, 266.43,  23722),
+    ("AMD",                          "美股个股", NISA_G,  USD, "NASDAQ:AMD",   1, 1, 465.58,  19102),
+    ("TSM タイワンセミ",             "美股个股", NISA_G,  USD, "NYSE:TSM",     1, 1, 417.52,  65928),
+    ("AAPL アップル",                "美股个股", NISA_G,  USD, "NASDAQ:AAPL",  1, 1, 319.70,  25715),
+    ("CLS セレスティカ",             "美股个股", NISA_G,  USD, "NYSE:CLS",     1, 1, 298.70,  60368),
+    ("VRT バーティブ",               "美股个股", NISA_G,  USD, "NYSE:VRT",     1, 1, 257.08,  54219),
+    ("6787 メイコー",                "日本个股", NISA_G,  JPY, "TYO:6787",     3, 1,  18760, 108763),
+    ("4385 メルカリ",                "日本个股", NISA_G,  JPY, "TYO:4385",     7, 1,   4617,  13825),
+    ("3492 ＭＩＲＡＲＴＨ (REIT)",    "日本个股", NISA_G,  JPY, "TYO:3492",     1, 1,  79000,  92300),
+    ("金 現物 (g)",                  "黄金",     OTHER,   JPY, "", 72.24958, 1,  23452, 1245041),
+    ("425A ＧＸゴールド",            "黄金",     NISA_G,  JPY, "TYO:425A",   380, 1,  390.9,  148610),
+    ("楽天・米ドルMMF",              "现金·MMF", TOKUTEI, JPY, "",           1, 1,   4969,    4934),
+    ("楽天証券 預り金",              "现金·MMF", OTHER,   JPY, "",           1, 1,   3478,    3478),
+    ("bitFlyer BTC",                 "加密货币", OTHER,   JPY, "CURRENCY:BTCJPY", 0.061912, 1, None, 893703),
+    ("野村 持株会",                  "持株会",   OTHER,   JPY, "",           1, 1,   None,    None),
+    ("ゆうちょ銀行",                 "银行存款", OTHER,   JPY, "",           1, 1,   None,    None),
 ]
 
 # 取引履歴から集計した楽天証券への純入金（円）
@@ -145,7 +149,14 @@ for i, (name, val, fmt, note) in enumerate([
         fill=EDIT, align=Alignment(horizontal="right"))
     put(cfg, f"C{i}", note, font=Font(size=9, color=MUTED), align=Alignment(indent=1))
     cfg.row_dimensions[i].height = 22
-put(cfg, "A8", "黄色格子随便改。其他所有表都引用这里。",
+put(cfg, "A8", "美元汇率(自动)", font=Font(size=11, color=INK), align=Alignment(indent=1))
+put(cfg, "B8", '=IFERROR(GOOGLEFINANCE("CURRENCY:USDJPY"),160.06)',
+    font=Font(bold=True, size=12, color=ACCENT), fmt='#,##0.00',
+    align=Alignment(horizontal="right"))
+put(cfg, "C8", "GOOGLEFINANCE 自动取。取不到就退回 160.06（2026/08/29 的值）。",
+    font=Font(size=9, color=MUTED), align=Alignment(indent=1))
+cfg.row_dimensions[8].height = 22
+put(cfg, "A10", "黄色格子随便改。其他所有表都引用这里。",
     font=Font(size=9, italic=True, color=MUTED))
 
 # -------------------------------------------------------------- 持仓明细 --
@@ -154,44 +165,55 @@ hold.sheet_view.showGridLines = False
 put(hold, "A1", "持仓明细 —— 每月更新「评价额」一列即可",
     font=Font(bold=True, size=14, color=INK))
 hold.merge_cells("A1:I1"); hold.row_dimensions[1].height = 26
-header(hold, 2, ["名称", "类别", "账户", "币种", "评价额(日元)", "成本(日元)",
+header(hold, 2, ["名称", "类别", "账户", "币种", "代码", "数量", "价格倍率",
+                 "实时价(自动)", "价格(手动)", "评价额(日元)", "成本(日元)",
                  "盈亏", "占比", "备注"],
-       (30, 12, 20, 8, 16, 16, 15, 9, 26))
-hold.freeze_panes = "A3"
+       (28, 11, 19, 7, 15, 13, 9, 13, 13, 15, 14, 14, 8, 30))
+hold.freeze_panes = "B3"
 
 dv_cat = DataValidation(type="list", formula1='"' + ",".join(CATS) + '"', allow_blank=True)
 dv_acc = DataValidation(type="list", formula1='"' + ",".join(ACCTS) + '"', allow_blank=True)
 hold.add_data_validation(dv_cat); dv_cat.add(f"B3:B{HOLDS+2}")
 hold.add_data_validation(dv_acc); dv_acc.add(f"C3:C{HOLDS+2}")
 
-for i, (nm, cat, acc, cur, v, cost) in enumerate(HOLDINGS):
+seen = {}
+for i, (nm, cat, acc, cur, tick, qty, mul, px, cost) in enumerate(HOLDINGS):
     r = 3 + i
-    hold[f"A{r}"], hold[f"B{r}"], hold[f"C{r}"], hold[f"D{r}"] = nm, cat, acc, cur
-    if v is not None:
-        hold[f"E{r}"] = v
-    else:
-        put(hold, f"I{r}", "← 填上评价额，总资产才准",
-            font=Font(size=9, bold=True, color=BAD))
-    if cost is not None: hold[f"F{r}"] = cost
+    for col, v in zip("ABCDEFG", (nm, cat, acc, cur, tick, qty, mul)):
+        hold[f"{col}{r}"] = v
+    if px is not None:
+        first = seen.setdefault(nm, r) if not tick else None
+        # 同じ投信が複数行あるときは、基準価額は最初の行を参照する（入力は1回で済む）
+        hold[f"I{r}"] = px if (tick or first == r) else f"=$I${first}"
+    if cost is not None: hold[f"K{r}"] = cost
+    if px is None:
+        put(hold, f"N{r}", "← 填价格，总资产才准", font=Font(size=9, bold=True, color=BAD))
+
 for r in range(3, HOLDS + 3):
-    hold[f"G{r}"] = f'=IF(OR($E{r}="",$F{r}=""),"",$E{r}-$F{r})'
-    hold[f"H{r}"] = f'=IF($E{r}="","",IFERROR($E{r}/SUM({H_VAL}),""))'
-    for col in "ABCDEF":
+    hold[f"H{r}"] = f'=IF($E{r}="","",IFERROR(GOOGLEFINANCE($E{r}),""))'
+    hold[f"J{r}"] = (f'=IF($F{r}="","",$F{r}/$G{r}*IF(ISNUMBER($H{r}),$H{r},$I{r})'
+                     f'*IF($D{r}="{USD}",{FX},1))')
+    hold[f"L{r}"] = f'=IF(OR($J{r}="",$K{r}=""),"",$J{r}-$K{r})'
+    hold[f"M{r}"] = f'=IF($J{r}="","",IFERROR($J{r}/SUM({H_VAL}),""))'
+    for col in "ABCDEFGIK":
         hold[f"{col}{r}"].fill = PatternFill("solid", fgColor=EDIT)
-    hold[f"E{r}"].number_format = YEN
-    hold[f"F{r}"].number_format = YEN
-    hold[f"G{r}"].number_format = YEN
-    hold[f"H{r}"].number_format = PCT
-    hold[f"G{r}"].font = Font(size=10, color=MUTED)
-    hold[f"H{r}"].font = Font(size=10, color=MUTED)
+    for col, f in (("H", '#,##0.00'), ("I", '#,##0.00'), ("J", YEN),
+                   ("K", YEN), ("L", YEN), ("M", PCT)):
+        hold[f"{col}{r}"].number_format = f
+    for col in "HLM":
+        hold[f"{col}{r}"].font = Font(size=10, color=MUTED)
+    hold[f"J{r}"].font = Font(bold=True, size=10, color=INK)
 hold.conditional_formatting.add(
-    f"G3:G{HOLDS+2}", CellIsRule(operator="lessThan", formula=["0"], font=Font(color=BAD)))
-put(hold, f"A{HOLDS+4}",
-    "名称/类别/账户是从你导出的楽天証券取引履歴还原的。已经卖掉的请直接删行，漏掉的请补上。",
-    font=Font(size=9, italic=True, color=MUTED))
-put(hold, f"A{HOLDS+5}",
-    "省力做法：每月只更新「总资产」一个数（记到月次记录）；这张明细表每季度整理一次就够。",
-    font=Font(size=9, italic=True, color=MUTED))
+    f"L3:L{HOLDS+2}", CellIsRule(operator="lessThan", formula=["0"], font=Font(color=BAD)))
+
+for i, t in enumerate([
+    "评价额 = 数量 ÷ 价格倍率 × 价格 × 汇率。有「实时价」时优先用它，没有才用「价格(手动)」。",
+    "股票/ETF 填了代码，价格由 GOOGLEFINANCE 自动取（约延迟15分钟），你不用管。",
+    "投資信託和金现物 Google 没有行情，「价格(手动)」要自己更新：投信填基準価額，金填每克日元。",
+    "价格倍率：投信的基準価額是每「1万口」的价格所以填 10000，股票填 1。",
+    "数量几乎不变 —— 只有你买卖的时候才要改。这就是记股数而不是记总额的意义。",
+]):
+    put(hold, f"A{HOLDS+4+i}", "・" + t, font=Font(size=9, color=MUTED))
 
 # -------------------------------------------------------------- 月次记录 --
 mon = wb.create_sheet(S_MON)
@@ -359,6 +381,7 @@ for i, t in enumerate([
     "黄金 14%。它不产生现金流，是保险，不是引擎。别指望它把你送到1亿。",
     "個別股 17%：AMD +290%、GOOG +107%，但メイコー -48%。投信（69%）才是主力。",
     "评价额会上下跳，你能控制的只有「累计本金」。看那一条。",
+    "BTC 数量 0.061912、成本 893,703 来自你自己的「Bitcoin trade history」表，最后一笔 2026/01/29。之后有交易的话要自己改。",
 ]):
     put(d, f"B{51+i}", "・" + t, font=Font(size=9, color=MUTED), align=Alignment(indent=1))
     d.merge_cells(f"B{51+i}:E{51+i}")

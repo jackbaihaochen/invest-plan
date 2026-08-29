@@ -10,8 +10,11 @@ from openpyxl import load_workbook
 ALLOWED = {  # Excel と Google スプレッドシートの両方に存在する関数だけ
  "IF","IFERROR","SUM","SUMIFS","AVERAGEIF","COUNTIF","COUNT","MIN","MAX","ROUND",
  "ROUNDUP","INT","MOD","TEXT","DATE","YEAR","MONTH","TODAY","EOMONTH","EDATE",
- "REPT","LOOKUP","NPER","ROW","AVERAGE","AVERAGEIFS","COUNTIFS","SUMIF","OR","AND",
+ "REPT","LOOKUP","NPER","ROW","AVERAGE","AVERAGEIFS","COUNTIFS","SUMIF","OR","AND","ISNUMBER","N",
 }
+
+SHEETS_ONLY = {"GOOGLEFINANCE"}   # Excel には無いが Google スプレッドシートにはある
+ALLOWED |= SHEETS_ONLY
 
 wb = load_workbook(sys.argv[1])
 names = set(wb.sheetnames)
@@ -51,6 +54,9 @@ for ws in wb.worksheets:
                 bad.append((where, "自己参照の疑い", f))
 
 print("使用関数:", " ".join(sorted(funcs)))
+only = funcs & SHEETS_ONLY
+if only:
+    print("Google スプレッドシート専用（Excel では動かない）:", " ".join(sorted(only)))
 print("シート:", " / ".join(wb.sheetnames))
 if bad:
     print(f"\n❌ {len(bad)} 件")
