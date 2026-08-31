@@ -22,6 +22,8 @@ YEN, PCT, MON, DAY = '#,##0"円"', '0.0%', 'yyyy"年"m"月"', 'yyyy/m/d'
 MONTHS, HOLDS = 72, 60
 
 S_DASH, S_HOLD, S_MON, S_CFG = "总览", "持仓明细", "月次记录", "设置"
+S_CSV = "CSV"
+CSV_N = 200   # CSV 貼り付け範囲の行数
 
 GOAL   = f"'{S_CFG}'!$B$2"
 TARGET = f"'{S_CFG}'!$B$3"
@@ -39,47 +41,58 @@ H_CAT = f"'{S_HOLD}'!$B$3:$B${HOLDS+2}"
 H_ACC = f"'{S_HOLD}'!$C$3:$C${HOLDS+2}"
 H_VAL = f"'{S_HOLD}'!$J$3:$J${HOLDS+2}"
 H_CST = f"'{S_HOLD}'!$K$3:$K${HOLDS+2}"
+# CSV 側の列: A種別 B銘柄コード C銘柄 D口座 E保有数量 I現在値 O時価評価額[円] Q評価損益[円]
+C_NAME = f"'{S_CSV}'!$C$1:$C${CSV_N}"
+C_ACC  = f"'{S_CSV}'!$D$1:$D${CSV_N}"
+C_QTY  = f"'{S_CSV}'!$E$1:$E${CSV_N}"
+C_PX   = f"'{S_CSV}'!$I$1:$I${CSV_N}"
+C_VAL  = f"'{S_CSV}'!$O$1:$O${CSV_N}"
+C_PL   = f"'{S_CSV}'!$Q$1:$Q${CSV_N}"
+C_LBL  = f"'{S_CSV}'!$A$1:$A${CSV_N}"
+C_LVAL = f"'{S_CSV}'!$B$1:$B${CSV_N}"
 FX    = f"'{S_CFG}'!$B$8"
 
 CATS = ["指数基金", "美股个股", "日本个股", "黄金",
         "现金·MMF", "加密货币", "持株会", "银行存款"]
 ACCTS = ["NISAつみたて投資枠", "NISA成長投資枠", "特定口座", "一般口座", "其他"]
 
-# 楽天証券「保有商品詳細」2026/08/29。数量と取得原価は確定値、価格は当日値（GOOGLEFINANCE が効けば上書きされる）
-# (名称, 类别, 账户, 币种, 代码, 数量, 倍率, 手动价, 成本)
+# 楽天証券「保有商品詳細」2026/08/29。末尾2つは CSV 側の (銘柄, 口座) = 突き合わせキー。
+# 数量・価格・取得原価は CSV を貼れば上書きされ、貼っていなければこの値が残る。
+# (名称, 类别, 账户, 币种, 代码, 数量, 倍率, 手动价, 成本, CSV銘柄, CSV口座)
 NISA_T, NISA_G, TOKUTEI, OTHER = "NISAつみたて投資枠", "NISA成長投資枠", "特定口座", "其他"
 JPY, USD = "日元", "美元"
+RAKU_SP = "楽天・プラス・Ｓ＆Ｐ５００インデックス・ファンド(楽天・プラス・Ｓ＆Ｐ５００)"
+ORUKAN  = "eMAXIS Slim 全世界株式(オール・カントリー)(オルカン)"
 HOLDINGS = [
-    ("楽天・プラス・S&P500",         "指数基金", NISA_T,  JPY, "", 1513390, 10000,  20176, 2200000),
-    ("楽天・プラス・S&P500",         "指数基金", NISA_G,  JPY, "", 1900698, 10000,  20176, 2559723),
-    ("楽天・プラス・S&P500",         "指数基金", NISA_G,  JPY, "",   34943, 10000,  20176,   50000),
-    ("eMAXIS Slim オルカン",         "指数基金", NISA_G,  JPY, "",  207794, 10000,  38842,  619402),
-    ("eMAXIS Slim オルカン",         "指数基金", NISA_T,  JPY, "",  165294, 10000,  38842,  600000),
-    ("iFreeNEXT FANG+",              "指数基金", NISA_G,  JPY, "",   39902, 10000, 100206,  350000),
-    ("eMAXIS Slim 米国株式(S&P500)",  "指数基金", NISA_G,  JPY, "",   35254, 10000,  45344,  100000),
-    ("楽天・プラス・NASDAQ-100",      "指数基金", NISA_G,  JPY, "",   10155, 10000,  18978,   20000),
-    ("NVDA エヌビディア",            "美股个股", NISA_G,  USD, "NASDAQ:NVDA", 17, 1, 217.55, 338145),
-    ("GOOG アルファベットC",         "美股个股", NISA_G,  USD, "NASDAQ:GOOG", 10, 1, 342.88, 265576),
-    ("CRCL サークル",                "美股个股", TOKUTEI, USD, "NYSE:CRCL",   18, 1,  87.14, 273264),
-    ("MSFT マイクロソフト",          "美股个股", NISA_G,  USD, "NASDAQ:MSFT",  2, 1, 513.53, 127332),
-    ("MSFT マイクロソフト",          "美股个股", TOKUTEI, USD, "NASDAQ:MSFT",  1, 1, 513.53,  60687),
-    ("AMZN アマゾン",                "美股个股", NISA_G,  USD, "NASDAQ:AMZN",  2, 1, 266.43,  63981),
-    ("AMZN アマゾン",                "美股个股", TOKUTEI, USD, "NASDAQ:AMZN",  1, 1, 266.43,  23722),
-    ("AMD",                          "美股个股", NISA_G,  USD, "NASDAQ:AMD",   1, 1, 465.58,  19102),
-    ("TSM タイワンセミ",             "美股个股", NISA_G,  USD, "NYSE:TSM",     1, 1, 417.52,  65928),
-    ("AAPL アップル",                "美股个股", NISA_G,  USD, "NASDAQ:AAPL",  1, 1, 319.70,  25715),
-    ("CLS セレスティカ",             "美股个股", NISA_G,  USD, "NYSE:CLS",     1, 1, 298.70,  60368),
-    ("VRT バーティブ",               "美股个股", NISA_G,  USD, "NYSE:VRT",     1, 1, 257.08,  54219),
-    ("6787 メイコー",                "日本个股", NISA_G,  JPY, "TYO:6787",     3, 1,  18760, 108763),
-    ("4385 メルカリ",                "日本个股", NISA_G,  JPY, "TYO:4385",     7, 1,   4617,  13825),
-    ("3492 ＭＩＲＡＲＴＨ (REIT)",    "日本个股", NISA_G,  JPY, "TYO:3492",     1, 1,  79000,  92300),
-    ("金 現物 (g)",                  "黄金",     OTHER,   JPY, "", 72.24958, 1,  23452, 1245041),
-    ("425A ＧＸゴールド",            "黄金",     NISA_G,  JPY, "TYO:425A",   380, 1,  390.9,  148610),
-    ("楽天・米ドルMMF",              "现金·MMF", TOKUTEI, JPY, "",           1, 1,   4969,    4934),
-    ("楽天証券 預り金",              "现金·MMF", OTHER,   JPY, "",           1, 1,   3478,    3478),
-    ("bitFlyer BTC",                 "加密货币", OTHER,   JPY, "CURRENCY:BTCJPY", 0.061912, 1, None, 893703),
-    ("野村 持株会",                  "持株会",   OTHER,   JPY, "",           1, 1,   None,    None),
-    ("ゆうちょ銀行",                 "银行存款", OTHER,   JPY, "",           1, 1,   None,    None),
+    ("楽天・プラス・S&P500",        "指数基金", NISA_T,  JPY, "", 1513390, 10000, 20176, 2200000, RAKU_SP, NISA_T),
+    ("楽天・プラス・S&P500",        "指数基金", NISA_G,  JPY, "", 1935641, 10000, 20176, 2609723, RAKU_SP, "NISA成長投資枠"),
+    ("eMAXIS Slim オルカン",        "指数基金", NISA_G,  JPY, "",  207794, 10000, 38842,  619402, ORUKAN, "NISA成長投資枠"),
+    ("eMAXIS Slim オルカン",        "指数基金", NISA_T,  JPY, "",  165294, 10000, 38842,  600000, ORUKAN, NISA_T),
+    ("iFreeNEXT FANG+",             "指数基金", NISA_G,  JPY, "",   39902, 10000,100206,  350000, "iFreeNEXT FANG+インデックス", "NISA成長投資枠"),
+    ("eMAXIS Slim 米国株式(S&P500)", "指数基金", NISA_G, JPY, "",   35254, 10000, 45344,  100000, "eMAXIS Slim 米国株式(S&P500)", "NISA成長投資枠"),
+    ("楽天・プラス・NASDAQ-100",     "指数基金", NISA_G, JPY, "",   10155, 10000, 18978,   20000, "楽天・プラス・NASDAQ-100インデックス・ファンド(楽天・プラス・NASDAQ-100)", "NISA成長投資枠"),
+    ("NVDA エヌビディア",           "美股个股", NISA_G,  USD, "NASDAQ:NVDA", 17, 1, 217.55, 338145, "エヌビディア", "NISA成長投資枠"),
+    ("GOOG アルファベットC",        "美股个股", NISA_G,  USD, "NASDAQ:GOOG", 10, 1, 342.88, 265576, "アルファベット クラスC", "NISA成長投資枠"),
+    ("CRCL サークル",               "美股个股", TOKUTEI, USD, "NYSE:CRCL",   18, 1,  87.14, 273264, "サークル・インターネット・グループ", "特定"),
+    ("MSFT マイクロソフト",         "美股个股", NISA_G,  USD, "NASDAQ:MSFT",  2, 1, 513.53, 127332, "マイクロソフト", "NISA成長投資枠"),
+    ("MSFT マイクロソフト",         "美股个股", TOKUTEI, USD, "NASDAQ:MSFT",  1, 1, 513.53,  60687, "マイクロソフト", "特定"),
+    ("AMZN アマゾン",               "美股个股", NISA_G,  USD, "NASDAQ:AMZN",  2, 1, 266.43,  63981, "アマゾン・ドット・コム", "NISA成長投資枠"),
+    ("AMZN アマゾン",               "美股个股", TOKUTEI, USD, "NASDAQ:AMZN",  1, 1, 266.43,  23722, "アマゾン・ドット・コム", "特定"),
+    ("AMD",                         "美股个股", NISA_G,  USD, "NASDAQ:AMD",   1, 1, 465.58,  19102, "アドバンスト・マイクロ・デバイス(AMD)", "NISA成長投資枠"),
+    ("TSM タイワンセミ",            "美股个股", NISA_G,  USD, "NYSE:TSM",     1, 1, 417.52,  65928, "タイワン・セミコンダクター・マニュファクチャリング", "NISA成長投資枠"),
+    ("AAPL アップル",               "美股个股", NISA_G,  USD, "NASDAQ:AAPL",  1, 1, 319.70,  25715, "アップル", "NISA成長投資枠"),
+    ("CLS セレスティカ",            "美股个股", NISA_G,  USD, "NYSE:CLS",     1, 1, 298.70,  60368, "セレスティカ", "NISA成長投資枠"),
+    ("VRT バーティブ",              "美股个股", NISA_G,  USD, "NYSE:VRT",     1, 1, 257.08,  54219, "バーティブ・ホールディングス", "NISA成長投資枠"),
+    ("6787 メイコー",               "日本个股", NISA_G,  JPY, "TYO:6787",     3, 1,  18760, 108763, "メイコー", "NISA成長投資枠"),
+    ("4385 メルカリ",               "日本个股", NISA_G,  JPY, "TYO:4385",     7, 1,   4617,  13825, "メルカリ", "NISA成長投資枠"),
+    ("3492 ＭＩＲＡＲＴＨ (REIT)",   "日本个股", NISA_G,  JPY, "TYO:3492",    1, 1,  79000,  92300, "ＭＩＲＡＲＴＨ不動産投", "NISA成長投資枠"),
+    ("金 現物 (g)",                 "黄金",     OTHER,   JPY, "", 72.24958, 1,  23452, 1245041, "金", "-"),
+    ("425A ＧＸゴールド",           "黄金",     NISA_G,  JPY, "TYO:425A",   380, 1,  390.9,  148610, "ＧＸゴールド", "NISA成長投資枠"),
+    ("楽天・米ドルMMF",             "现金·MMF", TOKUTEI, JPY, "",        3105, 100, 160.06,   4934, "ノーザン・トラスト・米ドル・リクイディティ・ファンド(楽天・米ドルMMF)", "特定"),
+    ("楽天証券 預り金",             "现金·MMF", OTHER,   JPY, "",           1, 1,   3478,    3478, "@CASH", ""),
+    ("bitFlyer BTC",                "加密货币", OTHER,   JPY, "CURRENCY:BTCJPY", 0.061912, 1, None, 893703, "", ""),
+    ("野村 持株会",                 "持株会",   OTHER,   JPY, "",           1, 1,   None,    None, "", ""),
+    ("ゆうちょ銀行",                "银行存款", OTHER,   JPY, "",           1, 1,   None,    None, "", ""),
 ]
 
 # 取引履歴から集計した楽天証券への純入金（円）
@@ -166,9 +179,9 @@ put(hold, "A1", "持仓明细 —— 每月更新「评价额」一列即可",
     font=Font(bold=True, size=14, color=INK))
 hold.merge_cells("A1:I1"); hold.row_dimensions[1].height = 26
 header(hold, 2, ["名称", "类别", "账户", "币种", "代码", "数量", "价格倍率",
-                 "实时价(自动)", "价格(手动)", "评价额(日元)", "成本(日元)",
-                 "盈亏", "占比", "备注"],
-       (28, 11, 19, 7, 15, 13, 9, 13, 13, 15, 14, 14, 8, 30))
+                 "实时价(自动)", "价格(手动/CSV)", "评价额(日元)", "成本(日元)",
+                 "盈亏", "占比", "备注", "CSV銘柄", "CSV口座"],
+       (28, 11, 19, 7, 15, 13, 9, 13, 15, 15, 14, 14, 8, 26, 34, 19))
 hold.freeze_panes = "B3"
 
 dv_cat = DataValidation(type="list", formula1='"' + ",".join(CATS) + '"', allow_blank=True)
@@ -176,18 +189,37 @@ dv_acc = DataValidation(type="list", formula1='"' + ",".join(ACCTS) + '"', allow
 hold.add_data_validation(dv_cat); dv_cat.add(f"B3:B{HOLDS+2}")
 hold.add_data_validation(dv_acc); dv_acc.add(f"C3:C{HOLDS+2}")
 
-seen = {}
-for i, (nm, cat, acc, cur, tick, qty, mul, px, cost) in enumerate(HOLDINGS):
+
+def csv_aware(r, expr, fallback):
+    """CSV に一致行があればそれを使い、無ければ 2026/08/29 の値を残す。"""
+    hit = f'COUNTIFS({C_NAME},$O{r},{C_ACC},$P{r})'
+    return f'=IF($O{r}="",{fallback},IF({hit}=0,{fallback},{expr}))'
+
+
+CASH_HIT = f'COUNTIF({C_LBL},"預り金")'
+CASH_SUM = (f'SUMIF({C_LBL},"預り金",{C_LVAL})+SUMIF({C_LBL},"信用保証金",{C_LVAL})'
+            f'+SUMIF({C_LBL},"外貨預り金",{C_LVAL})')
+
+for i, (nm, cat, acc, cur, tick, qty, mul, px, cost, cnm, cac) in enumerate(HOLDINGS):
     r = 3 + i
-    for col, v in zip("ABCDEFG", (nm, cat, acc, cur, tick, qty, mul)):
+    for col, v in zip("ABCDEG", (nm, cat, acc, cur, tick, mul)):
         hold[f"{col}{r}"] = v
-    if px is not None:
-        first = seen.setdefault(nm, r) if not tick else None
-        # 同じ投信が複数行あるときは、基準価額は最初の行を参照する（入力は1回で済む）
-        hold[f"I{r}"] = px if (tick or first == r) else f"=$I${first}"
-    if cost is not None: hold[f"K{r}"] = cost
-    if px is None:
-        put(hold, f"N{r}", "← 填价格，总资产才准", font=Font(size=9, bold=True, color=BAD))
+    hold[f"O{r}"], hold[f"P{r}"] = cnm, cac
+
+    if cnm == "@CASH":          # 預り金はヘッダーブロック側にあるので別扱い
+        hold[f"F{r}"] = qty
+        hold[f"I{r}"] = f'=IF({CASH_HIT}=0,{px},{CASH_SUM})'
+        hold[f"K{r}"] = f'=IF({CASH_HIT}=0,{cost},{CASH_SUM})'
+    elif cnm:
+        hold[f"F{r}"] = csv_aware(r, f'SUMIFS({C_QTY},{C_NAME},$O{r},{C_ACC},$P{r})', qty)
+        hold[f"I{r}"] = csv_aware(r, f'AVERAGEIFS({C_PX},{C_NAME},$O{r},{C_ACC},$P{r})', px)
+        hold[f"K{r}"] = csv_aware(
+            r, f'SUMIFS({C_VAL},{C_NAME},$O{r},{C_ACC},$P{r})'
+               f'-SUMIFS({C_PL},{C_NAME},$O{r},{C_ACC},$P{r})', cost)
+    else:                        # 楽天以外は手入力のまま
+        hold[f"F{r}"] = qty
+        if px is not None:   hold[f"I{r}"] = px
+        if cost is not None: hold[f"K{r}"] = cost
 
 for r in range(3, HOLDS + 3):
     hold[f"H{r}"] = f'=IF($E{r}="","",IFERROR(GOOGLEFINANCE($E{r}),""))'
@@ -195,26 +227,51 @@ for r in range(3, HOLDS + 3):
                      f'*IF($D{r}="{USD}",{FX},1))')
     hold[f"L{r}"] = f'=IF(OR($J{r}="",$K{r}=""),"",$J{r}-$K{r})'
     hold[f"M{r}"] = f'=IF($J{r}="","",IFERROR($J{r}/SUM({H_VAL}),""))'
-    for col in "ABCDEFGIK":
+    hold[f"N{r}"] = f'=IF($A{r}="","",IF($J{r}=0,"← 填价格，总资产才准",""))'
+    for col in "ABCDEG":
         hold[f"{col}{r}"].fill = PatternFill("solid", fgColor=EDIT)
-    for col, f in (("H", '#,##0.00'), ("I", '#,##0.00'), ("J", YEN),
-                   ("K", YEN), ("L", YEN), ("M", PCT)):
+    for col, f in (("F", '#,##0.######'), ("H", '#,##0.00'), ("I", '#,##0.00'),
+                   ("J", YEN), ("K", YEN), ("L", YEN), ("M", PCT)):
         hold[f"{col}{r}"].number_format = f
-    for col in "HLM":
+    for col in "FHIKLM":
         hold[f"{col}{r}"].font = Font(size=10, color=MUTED)
     hold[f"J{r}"].font = Font(bold=True, size=10, color=INK)
+    hold[f"N{r}"].font = Font(size=9, bold=True, color=BAD)
+    for col in "OP":
+        hold[f"{col}{r}"].font = Font(size=8, color="94A3B8")
 hold.conditional_formatting.add(
     f"L3:L{HOLDS+2}", CellIsRule(operator="lessThan", formula=["0"], font=Font(color=BAD)))
 
 for i, t in enumerate([
-    "评价额 = 数量 ÷ 价格倍率 × 价格 × 汇率。有「实时价」时优先用它，没有才用「价格(手动)」。",
-    "股票/ETF 填了代码，价格由 GOOGLEFINANCE 自动取（约延迟15分钟），你不用管。",
-    "投資信託和金现物 Google 没有行情，「价格(手动)」要自己更新：投信填基準価額，金填每克日元。",
-    "价格倍率：投信的基準価額是每「1万口」的价格所以填 10000，股票填 1。",
-    "数量几乎不变 —— 只有你买卖的时候才要改。这就是记股数而不是记总额的意义。",
+    "评价额 = 数量 ÷ 价格倍率 × 价格 × 汇率。「实时价」有数就用它，没有才用「价格(手动/CSV)」。",
+    "数量 / 价格 / 成本 三列会自动认 CSV 页 —— 贴了新的 assetbalanceall 就自动更新，没贴就保持 2026/08/29 的快照。",
+    "最右边两列是跟 CSV 对照用的键（楽天写法的銘柄名和口座）。楽天改了名字才需要动它。",
+    "美股和汇率走 GOOGLEFINANCE 实时。日本股的 TYO: 代码目前取不到值，会自动退回 CSV 的价格。",
+    "BTC / 野村 / ゆうちょ 不在 CSV 里，永远手填。",
 ]):
     put(hold, f"A{HOLDS+4+i}", "・" + t, font=Font(size=9, color=MUTED))
 
+# ------------------------------------------------------------------- CSV --
+csvs = wb.create_sheet(S_CSV)
+csvs.column_dimensions["A"].width = 22
+csvs.column_dimensions["C"].width = 46
+csvs.column_dimensions["D"].width = 20
+put(csvs, "A1", "这一页整页都是给 assetbalanceall CSV 用的。下面的字会被覆盖掉，没关系。",
+    font=Font(bold=True, size=12, color=INK))
+for i, t in enumerate([
+    "",
+    "更新步骤（每月一次，约 1 分钟）：",
+    "  1. 楽天証券 → 保有商品一覧 → CSVダウンロード（文件名形如 assetbalanceall_20260829_231124.csv）",
+    "  2. 先点一下这一页的标签，确保当前在「CSV」页",
+    "  3. 文件 > 导入 > 上传 > 选那个 CSV",
+    "  4. 导入位置选「替换当前工作表」← 一定要选这个，别选「替换电子表格」",
+    "  5. 分隔符选「逗号」，然后导入",
+    "",
+    "完成。持仓明细的数量 / 价格 / 成本会自动跟着变，你不用动任何格子。",
+    "",
+    "没导入之前，表里用的是 2026/08/29 那份快照的数字。",
+]):
+    put(csvs, f"A{2+i}", t, font=Font(size=10, color=MUTED))
 # -------------------------------------------------------------- 月次记录 --
 mon = wb.create_sheet(S_MON)
 mon.sheet_view.showGridLines = False
@@ -270,8 +327,9 @@ for c, w in zip("ABCDEFG", (2, 24, 20, 16, 24, 3, 3)):
 
 TOTAL = "$C$6"; THIS = "$C$14"; PACE = "$C$20"; MP = "$C$21"; MT = "$C$22"
 NEXT = "$C$45"
-LAST = lambda col: (f"IFERROR(LOOKUP(2,1/('{S_MON}'!${col}$3:${col}${MONTHS+2}<>\"\"),"
-                   f"'{S_MON}'!${col}$3:${col}${MONTHS+2}),0)")
+LAST = lambda col: (
+    f"IFERROR(INDEX('{S_MON}'!${col}$3:${col}${MONTHS+2},"
+    f"MATCH(MAX({M_YM}),{M_YM},0)),0)")
 
 huge = Font(bold=True, size=26, color=ACCENT)
 val  = Font(bold=True, size=12, color=INK)
@@ -288,6 +346,9 @@ band(d, 5, "  现在")
 label(d, 6, "总资产");  put(d, "C6", f"=SUM({H_VAL})", font=huge, fmt=YEN)
 d.row_dimensions[6].height = 34
 put(d, "D6", '="（持仓明细自动合计）"', font=sub)
+put(d, "E6", f'=IF(COUNTIF({C_LBL},"種別")=0,"CSV 未导入 —— 用的是 2026/08/29 快照",'
+             f'"CSV 已导入 "&IFERROR(INDEX({C_ACC},MATCH("米ドル",{C_LBL},0)),""))',
+    font=Font(size=9, italic=True, color=MUTED))
 label(d, 7, "距离目标"); put(d, "C7", f"={GOAL}-{TOTAL}", font=val, fmt=YEN)
 label(d, 8, "进度");     put(d, "C8", f"={TOTAL}/{GOAL}", font=val, fmt=PCT)
 put(d, "E8", bar(f"{TOTAL}/{GOAL}"), font=barf)

@@ -10,7 +10,7 @@ from openpyxl import load_workbook
 ALLOWED = {  # Excel と Google スプレッドシートの両方に存在する関数だけ
  "IF","IFERROR","SUM","SUMIFS","AVERAGEIF","COUNTIF","COUNT","MIN","MAX","ROUND",
  "ROUNDUP","INT","MOD","TEXT","DATE","YEAR","MONTH","TODAY","EOMONTH","EDATE",
- "REPT","LOOKUP","NPER","ROW","AVERAGE","AVERAGEIFS","COUNTIFS","SUMIF","OR","AND","ISNUMBER","N",
+ "REPT","LOOKUP","NPER","ROW","AVERAGE","AVERAGEIFS","COUNTIFS","SUMIF","OR","AND","ISNUMBER","N","INDEX","MATCH","COUNTIF",
 }
 
 SHEETS_ONLY = {"GOOGLEFINANCE"}   # Excel には無いが Google スプレッドシートにはある
