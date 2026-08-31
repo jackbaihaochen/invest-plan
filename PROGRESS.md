@@ -1,8 +1,8 @@
 # PROGRESS
 
-**Current Status**：`claude/rebuild` 分支。上一版实现整体废弃，正在重做。
-架构提案 [docs/changes/rakuten-dashboard/proposal.md](docs/changes/rakuten-dashboard/proposal.md)
-**等待批准**，未开始写代码。
+**Current Status**：`claude/rebuild` 分支。提案已批准，正在实现。
+骨架（Vite + React + TS + vitest）就位，两个 CSV 解析器完成并对真实文件验证通过（19 项测试）。
+下一步：基準価額メール解析 → 领域计算 → Apps Script → UI。
 
 **Blockers**：无（CSV 已拿到并验证，见 proposal §8）。等提案批准即可开工。
 
@@ -10,9 +10,9 @@
 
 ## Plan
 
-- [ ] 架构提案获批
-- [ ] 项目骨架（Vite + React + TS + vitest + GitHub Pages 部署）
-- [ ] CSV 解析（规格已确定，见 proposal §8）
+- [x] 架构提案获批
+- [x] 项目骨架（Vite + React + TS + vitest）／ [ ] GitHub Pages 部署
+- [x] CSV 解析（持仓快照 + 交易履历，19 项测试对真实文件通过）
 - [ ] 手动记录与 CSV 的对账（coverageEnd 接缝 + 匹配规则）
 - [ ] 交易记录一览 + 分类时序图
 - [ ] Google Sheet 读路径 + 数据模型
@@ -24,6 +24,21 @@
 ---
 
 ## Completed
+
+### 2026-09-01 · CSV 解析器完成，对真实文件全部验证通过
+`src/domain/{csv,types,holdings,transactions}.ts` + 19 项测试。测试直接读仓库里的
+原始 CP932 文件，不放转码副本 —— 能否用 `TextDecoder('shift_jis')` 读也是被测对象。
+
+断言的是硬数字，不留丸め誤差的逃生口：Σ評価損益 = ***（与記載完全一致）、
+時価 *** ＋ 預り金 *** 与 資産合計 差 −6、NISA 取得原価 = ***、
+純入金 = ***、coverageEnd = 2026-08-18。
+
+未知の取引区分は**抛错而不是默默归类** —— 默认归 internal 会漏掉入金，
+默认归 inflow 会重复计。两种都是静默出错。
+
+写测试时发现三处我自己写错的断言（跨币种振替当天 JP 侧还有一笔金積立、
+income 是 61 笔不是 60、JP/US 不重复这一点只对売買成立不对振替成立），
+已按数据实际的样子修正。合计段的标签是「預り金合計」不是「預り金等合計」。
 
 ### 2026-09-01 · 拿到真实 CSV，三个文件全部解析验证通过
 `assetbalance(all)` / `adjusthistory(JP)` / `adjusthistory(US)`，均为 CP932。
