@@ -9,8 +9,13 @@
 顺序已按用户同意调整为「先界面后后端」：先做出能看能改的东西，
 需要手工配置的基础设施（表格 / Apps Script / 邮件触发器）留到最后。
 
-下一步：push 到 main → 用户改 Pages 设置 → 第 3 阶段 Sheet + Apps Script + 基準価額メール。
-仓库保持公开：配信物里没有任何交易数据，测试夹具也是作り物。
+**已上线**：https://jackbaihaochen.github.io/invest-plan/ （2026-09-03 首次部署成功、
+用户实机确认可打开并能上传 CSV）。仓库保持公开：配信物里没有任何交易数据，
+测试夹具也是作り物。
+
+下一步：第 3 阶段 Sheet + Apps Script + 基準価額メール。方针已变更 ——
+Sheet 设为「仅自己」，**读也走 Apps Script 的令牌**（原方案是读走公开端点）。
+这推翻了 decisions.md 里的一条已记决策，要先写 A 类差分再动手。
 
 **Blockers**：无（CSV 已拿到并验证，见 proposal §8）。等提案批准即可开工。
 
@@ -37,6 +42,16 @@
 ---
 
 ## Completed
+
+### 2026-09-03 · 第 2 阶段完成，站点上线
+https://jackbaihaochen.github.io/invest-plan/ で公開。初回は deploy が 404 で落ちた
+—— Settings → Pages の Source が「Deploy from a branch」のままだったため。
+設定を「GitHub Actions」に変えて re-run で緑。ユーザーが実機で表示と CSV 取り込みを確認。
+
+未提交で控えているもの：workflow の action バージョン更新（checkout v4→v7、
+setup-node v4→v7、upload-pages-artifact v3→v5、deploy-pages v4→v5）。
+Node 20 の非推奨警告が消える。**最初の緑を取ってから**当てる —— 既知の動く状態を
+対照に置いておかないと、壊れたときに設定のせいか更新のせいか切り分けられない。
 
 ### 2026-09-02 · GitHub Pages の配信を用意（第 2 阶段）
 `.github/workflows/deploy.yml` —— `tsc -b` → `npm test` → `build` が通ったものだけ配る。
