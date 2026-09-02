@@ -9,7 +9,8 @@
 顺序已按用户同意调整为「先界面后后端」：先做出能看能改的东西，
 需要手工配置的基础设施（表格 / Apps Script / 邮件触发器）留到最后。
 
-下一步：第 2 阶段 GitHub Pages 部署 → 第 3 阶段 Sheet + Apps Script + 基準価額メール。
+下一步：push 到 main → 用户改 Pages 设置 → 第 3 阶段 Sheet + Apps Script + 基準価額メール。
+仓库保持公开：配信物里没有任何交易数据，测试夹具也是作り物。
 
 **Blockers**：无（CSV 已拿到并验证，见 proposal §8）。等提案批准即可开工。
 
@@ -20,7 +21,7 @@
 - [x] 架构提案获批
 - [x] 项目骨架（Vite + React + TS + vitest）
 - [x] 第 1 阶段：本地可用的看板（localStorage，无后端）
-- [ ] 第 2 阶段：GitHub Pages 部署
+- [x] 第 2 阶段：GitHub Pages 部署（要用户在 Settings → Pages 把 Source 改成 GitHub Actions）
 - [x] CSV 解析（持仓快照 + 交易履历，19 项测试对真实文件通过）
 - [x] 手动记录与 CSV 的对账（coverageEnd 接缝 + 匹配规则）
 - [x] 交易一览（可按 入金/出金/口座内/収益 筛选）+ 分类饼图
@@ -36,6 +37,17 @@
 ---
 
 ## Completed
+
+### 2026-09-02 · GitHub Pages の配信を用意（第 2 阶段）
+`.github/workflows/deploy.yml` —— `tsc -b` → `npm test` → `build` が通ったものだけ配る。
+本番ビルドを `/invest-plan/` サブパスで実機確認：作り物 CSV を入れて全カードが描画、
+console エラーなし、`valuePoints` も記録される。手順は [docs/deploy.md](docs/deploy.md)。
+
+ついでに `index.html` の `color-scheme` が `light dark` のままだったのを `light` に直した。
+亮色一本にしたのに、ブラウザ側だけ暗いフォーム部品とスクロールバーを描いていた。
+
+**残る制約**：データは端末ごとの localStorage。携帯で開いても空で、その端末で
+もう一度 CSV を入れる必要がある。多端末は第 3 阶段まで解けない。
 
 ### 2026-09-02 · テスト用 CSV を作り物に差し替え、本物をリポジトリから外す
 きっかけはユーザーの指摘 ——「テストデータなら本物である必要はない」。そのとおりで、
