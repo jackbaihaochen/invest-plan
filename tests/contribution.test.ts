@@ -16,7 +16,7 @@ const entry = (id: string, on: string, amountJpy: number): Entry => ({ id, on, a
 
 describe('手動記録と CSV の継ぎ目', () => {
   it('両ファイルを合わせても純入金は変わらない（外貨側は外部との出入りを持たない）', () => {
-    expect(totalNet(txns)).toBe(***)
+    expect(totalNet(txns)).toBe(4_895_587)
   })
 
   it('CSV が届いていない期間の記録は暫定として数える', () => {
@@ -67,10 +67,10 @@ describe('手動記録と CSV の継ぎ目', () => {
   it('見通しには平均、環には中央値 — 問いが違うので同じ数を使わない', () => {
     const monthly = monthlyNet(txns)
     const last6 = [...monthly.values()].slice(-6)
-    expect(last6).toEqual([150_000, 200_000, 155_587, 310_000, 110_000, 100_000])
+    expect(last6).toEqual([150_000, 200_000, 155_587, 310_000, 150_000, 100_000])
 
     // 平均は「実際どれだけ積み上がったか」。突出した 31万の月も含める。
-    expect(meanRecentNet(monthly)).toBeCloseTo(***, 0)
+    expect(meanRecentNet(monthly)).toBeCloseTo(177_597.83, 2)
     // 中央値は「今月勝てる目標はどこか」。最高の月を目標にすると大半の月で負ける。
     expect(medianRecentNet(monthly)).toBe(152_793.5)
   })

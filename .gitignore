@@ -2,3 +2,6 @@ node_modules/
 dist/
 *.tsbuildinfo
 .DS_Store
+
+# 本物の取引データはコミットしない。持っている人だけ実データでも検証できる。
+tests/fixtures/rakuten-private/

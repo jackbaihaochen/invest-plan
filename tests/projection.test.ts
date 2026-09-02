@@ -7,8 +7,8 @@ import {
   wholeMonthsToGoal,
 } from '../src/domain/projection'
 
-// 2026/08/29 時点の楽天証券 資産合計。
-const NOW = ***
+// テスト用ダミーの 資産合計（tests/fixtures/make-rakuten.mjs が生成する値）。
+const NOW = 6_365_266
 const PLAN = { goalJpy: 100_000_000, annualRate: 0.07 }
 const FROM = new Date(2026, 8, 1) // 2026-09
 
@@ -18,37 +18,37 @@ const FROM = new Date(2026, 8, 1) // 2026-09
  * 後から変えたらここが落ちる。
  */
 describe('1億円までの見通し', () => {
-  it('計画どおり 40万/月 なら 10年5ヶ月・2037年2月', () => {
-    expect(wholeMonthsToGoal(PLAN, NOW, 400_000)).toBe(125)
-    expect(splitMonths(125)).toEqual({ years: 10, months: 5 })
-    expect(goalDate(PLAN, NOW, 400_000, FROM)).toEqual({ year: 2037, month: 2 })
+  it('計画どおり 40万/月 なら 11年8ヶ月・2038年5月', () => {
+    expect(wholeMonthsToGoal(PLAN, NOW, 400_000)).toBe(140)
+    expect(splitMonths(140)).toEqual({ years: 11, months: 8 })
+    expect(goalDate(PLAN, NOW, 400_000, FROM)).toEqual({ year: 2038, month: 5 })
   })
 
-  it('実績ペース 17万/月 なら 16年1ヶ月・2042年10月', () => {
-    expect(wholeMonthsToGoal(PLAN, NOW, 170_000)).toBe(193)
-    expect(splitMonths(193)).toEqual({ years: 16, months: 1 })
-    expect(goalDate(PLAN, NOW, 170_000, FROM)).toEqual({ year: 2042, month: 10 })
+  it('実績ペース 17万/月 なら 18年6ヶ月・2045年3月', () => {
+    expect(wholeMonthsToGoal(PLAN, NOW, 170_000)).toBe(222)
+    expect(splitMonths(222)).toEqual({ years: 18, months: 6 })
+    expect(goalDate(PLAN, NOW, 170_000, FROM)).toEqual({ year: 2045, month: 3 })
   })
 
   it('遅れは実績と計画の差として出す', () => {
-    expect(monthsBehindPlan(PLAN, NOW, 170_000, 400_000)).toBe(68) // 5年8ヶ月
-    expect(splitMonths(68)).toEqual({ years: 5, months: 8 })
+    expect(monthsBehindPlan(PLAN, NOW, 170_000, 400_000)).toBe(82) // 6年10ヶ月
+    expect(splitMonths(82)).toEqual({ years: 6, months: 10 })
   })
 
   it('1回の追加投入が到達日を何日早めるか', () => {
-    const base = *** // 直近6ヶ月の純入金 月平均
-    expect(daysSooner(PLAN, NOW, base, 50_000)).toBeCloseTo(6.2, 1)
-    expect(daysSooner(PLAN, NOW, base, 250_000)).toBeCloseTo(30.8, 1)
-    // きりのいい 17万ペースだと 30.9 日。基準ペースが違えば答えも違う。
-    expect(daysSooner(PLAN, NOW, 170_000, 250_000)).toBeCloseTo(30.9, 1)
+    const base = 177_598 // 直近6ヶ月の純入金 月平均
+    expect(daysSooner(PLAN, NOW, base, 50_000)).toBeCloseTo(7.1, 1)
+    expect(daysSooner(PLAN, NOW, base, 250_000)).toBeCloseTo(35.4, 1)
+    // きりのいい 17万ペースだと 36.7 日。基準ペースが違えば答えも違う。
+    expect(daysSooner(PLAN, NOW, 170_000, 250_000)).toBeCloseTo(36.7, 1)
   })
 
   it('基準ペースが低いほど1回の追加が効く — 環を現実的な値に置く根拠', () => {
-    // 同じ5万が、17万ペースなら6.2日、40万ペースなら3.2日にしかならない。
+    // 同じ5万が、17.8万ペースなら7.1日、40万ペースなら3.5日にしかならない。
     // 届かない目標を環に置くと、手を動かしても数字が動かなくなる。
-    const atReal = daysSooner(PLAN, NOW, ***, 50_000)
+    const atReal = daysSooner(PLAN, NOW, 177_598, 50_000)
     const atPlan = daysSooner(PLAN, NOW, 400_000, 50_000)
-    expect(atPlan).toBeCloseTo(3.2, 1)
+    expect(atPlan).toBeCloseTo(3.5, 1)
     expect(atReal).toBeGreaterThan(atPlan * 1.9)
   })
 

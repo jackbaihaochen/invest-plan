@@ -14,8 +14,8 @@ const all = [...jp, ...us]
 
 describe('取引履歴の取り込み', () => {
   it('両ファイルを全行読む', () => {
-    expect(jp).toHaveLength(465)
-    expect(us).toHaveLength(128)
+    expect(jp).toHaveLength(161)
+    expect(us).toHaveLength(54)
   })
 
   it('外貨ファイルは取引区分と口座区分の列順が逆 — 名前で引けているか', () => {
@@ -26,8 +26,8 @@ describe('取引履歴の取り込み', () => {
     expect(new Set(us.map((t) => t.account))).toContain('特定')
   })
 
-  it('純入金は全期間で *** 円', () => {
-    expect(totalNet(jp)).toBe(***)
+  it('純入金は全期間で 4,895,587 円', () => {
+    expect(totalNet(jp)).toBe(4_895_587)
   })
 
   it('外貨ファイルは外部との出入りをひとつも含まない', () => {
@@ -37,24 +37,24 @@ describe('取引履歴の取り込み', () => {
 
   it('振替出金は金の定額積立であって取り崩しではない', () => {
     const gold = jp.filter((t) => t.type === '振替出金')
-    expect(gold).toHaveLength(21)
+    expect(gold).toHaveLength(20)
     expect(gold.every((t) => t.flow === 'internal' && t.netJpy === 0)).toBe(true)
-    expect(gold.reduce((a, t) => a + t.paidJpy, 0)).toBe(***)
+    expect(gold.reduce((a, t) => a + t.paidJpy, 0)).toBe(1_000_000)
   })
 
   it('円と外貨をまたぐ振替は対で現れ、両側とも投入に数えない', () => {
-    // 同じ 97.52 USD の移動が、外貨側で出金・円側で入金として二度記録される。
+    // 同じ移動が、外貨側で出金・円側で入金として二度記録される。
     // 為替の丸めで 1 円ずれるが、どちらも internal なので合計に影響しない。
     const out = us.find((t) => t.settledOn === '2025-08-27' && t.type === '振替出金')
     const back = jp.find((t) => t.settledOn === '2025-08-27' && t.type === '振替入金')
-    expect(out?.paidJpy).toBe(14_359)
-    expect(back?.receivedJpy).toBe(14_360)
+    expect(out?.paidJpy).toBe(12_345)
+    expect(back?.receivedJpy).toBe(12_346)
     expect([out, back].every((t) => t?.flow === 'internal' && t.netJpy === 0)).toBe(true)
   })
 
   it('配当・分配金・利金は資産を増やすが投入ではない', () => {
     const income = all.filter((t) => t.flow === 'income')
-    expect(income).toHaveLength(61) // 外株配当金 54、投信分配金 4、利金 2、国内株式配当金 1
+    expect(income).toHaveLength(27) // 外株配当金 20、投信分配金 3、国内株式配当金 2、利金 2
     expect(income.every((t) => t.netJpy === 0)).toBe(true)
   })
 
@@ -68,7 +68,7 @@ describe('取引履歴の取り込み', () => {
   })
 
   it('CSV が押さえている最終日は受渡日の最大値（ダウンロード日ではない）', () => {
-    expect(coverageEnd(jp)).toBe('2026-08-18')
+    expect(coverageEnd(jp)).toBe('2026-08-15')
     expect(coverageEnd(us)).toBe('2026-08-26')
   })
 
@@ -76,12 +76,15 @@ describe('取引履歴の取り込み', () => {
     const m = monthlyNet(jp)
     expect(m.get('2026-08')).toBe(100_000)
     expect(m.get('2026-06')).toBe(310_000)
-    expect(m.get('2025-11')).toBe(-***)
+    expect(m.get('2025-11')).toBe(-250_000)
     expect([...m.keys()][0]).toBe('2024-03')
   })
 
-  it('積立の内訳が本人の申告と一致する（分類が正しいことの独立した裏づけ）', () => {
-    // 「毎月15万 = NISA10万 + 楽天キャッシュ5万、直近で楽天キャッシュを止めた」
+  it('入金の種類ごとに、正しい月へ振り分ける', () => {
+    // 同じ月に種類の違う入金が並ぶ。取引区分と受渡日の対応がずれたらここが落ちる。
+    // （本物のデータでは「毎月15万 = カード10万 + 楽天キャッシュ5万」という
+    //   本人の申告と突き合わせる裏づけになっていた。作り物では自分の生成器を
+    //   見ているだけなので、その意味での裏づけにはならない。）
     const inMonth = (ym: string, type: string) =>
       jp.filter((t) => t.settledOn.startsWith(ym) && t.type === type)
         .reduce((a, t) => a + t.receivedJpy, 0)

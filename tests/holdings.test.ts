@@ -7,37 +7,37 @@ const sum = (f: (p: (typeof snap.positions)[number]) => number) =>
   snap.positions.reduce((a, p) => a + f(p), 0)
 
 describe('保有商品詳細の取り込み', () => {
-  it('CP932 のまま読めて 26 ポジションになる', () => {
-    expect(snap.positions).toHaveLength(26)
+  it('CP932 のまま読めて 11 ポジションになる', () => {
+    expect(snap.positions).toHaveLength(11)
     expect(snap.asOf).toBe('2026-08-29')
   })
 
   it('評価損益は CSV 記載の合計と完全に一致する', () => {
     // ここがずれたら列の対応がずれている。丸め誤差の逃げ道を作らない。
-    expect(sum((p) => p.gainJpy)).toBe(***)
+    expect(sum((p) => p.gainJpy)).toBe(1_469_041)
   })
 
   it('時価と預り金の合計が資産合計に一致する（米株行の丸めぶんだけ差が出る）', () => {
-    expect(sum((p) => p.marketValueJpy)).toBe(***)
-    expect(snap.cashJpy).toBe(***)
-    expect(snap.totalJpy).toBe(***)
+    expect(sum((p) => p.marketValueJpy)).toBe(6_359_240)
+    expect(snap.cashJpy).toBe(6_020)
+    expect(snap.totalJpy).toBe(6_365_266)
     expect(sum((p) => p.marketValueJpy) + snap.cashJpy - snap.totalJpy).toBe(-6)
   })
 
   it('取得原価は 時価 − 評価損益 で出す（種別ごとに掛け目が違うので推定しない）', () => {
-    // 掛け目を推定した実装は外貨建MMF で *** のところ 4,900 万を出した。
+    // 掛け目を推定した実装は、外貨建MMF の取得原価を4桁ほど大きく出した。
     const mmf = snap.positions.find((p) => p.kind === '外貨建MMF')
-    expect(mmf?.costJpy).toBe(***)
+    expect(mmf?.costJpy).toBe(5_199)
     const nisa = snap.positions.filter((p) => p.account.startsWith('NISA'))
-    expect(nisa.reduce((a, p) => a + p.costJpy, 0)).toBe(***)
+    expect(nisa.reduce((a, p) => a + p.costJpy, 0)).toBe(3_859_000)
   })
 
   it('ヘッダの単位列の重複に潰されず、数量と価格の単位を別々に取る', () => {
     const gold = snap.positions.find((p) => p.kind === '金・プラチナ')
-    expect(gold?.quantity).toBeCloseTo(***, 5)
+    expect(gold?.quantity).toBeCloseTo(40.5123, 4)
     expect(gold?.quantityUnit).toBe('g')
     expect(gold?.priceUnit).toBe('円')
-    const usd = snap.positions.find((p) => p.ticker === 'NVDA')
+    const usd = snap.positions.find((p) => p.ticker === 'MSFT')
     expect(usd?.quantityUnit).toBe('株')
     expect(usd?.priceUnit).toBe('USD')
   })

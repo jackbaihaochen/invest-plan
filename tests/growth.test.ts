@@ -17,7 +17,7 @@ describe('累計投入の推移', () => {
 
   it('終点は純入金の総額と一致する', () => {
     expect(s[s.length - 1]?.jpy).toBe(totalNet(txns))
-    expect(s[s.length - 1]?.jpy).toBe(***)
+    expect(s[s.length - 1]?.jpy).toBe(4_895_587)
   })
 
   it('同じ日は1点にまとめる', () => {
@@ -25,7 +25,7 @@ describe('累計投入の推移', () => {
   })
 
   it('単調に増えるとは限らない — 取り崩した日は下がる', () => {
-    // 2025/10〜2026/02 に 178万の引き出しがある。線を単調と決めつけない。
+    // 2025/10〜2026/02 に引き出しの月がある。線を単調と決めつけない。
     const drops = s.filter((p, i) => i > 0 && p.jpy < s[i - 1]!.jpy)
     expect(drops.length).toBeGreaterThan(0)
   })
@@ -35,10 +35,10 @@ describe('見通しの線', () => {
   const from = new Date(2026, 8, 1)
 
   it('線の終点と閉じた式の到達月が食い違わない', () => {
-    const s = projectionSeries(plan, ***, ***, from)
-    expect(s.length - 1).toBe(Math.ceil(monthsToGoal(plan, ***, ***)))
+    const s = projectionSeries(plan, 6_365_266, 177_598, from)
+    expect(s.length - 1).toBe(Math.ceil(monthsToGoal(plan, 6_365_266, 177_598)))
     expect(s[s.length - 1]!.jpy).toBeGreaterThanOrEqual(plan.goalJpy)
-    expect(s[0]!.jpy).toBe(***)
+    expect(s[0]!.jpy).toBe(6_365_266)
   })
 
   it('届かない条件でも打ち切って返す', () => {
@@ -50,8 +50,8 @@ describe('見通しの線', () => {
 describe('必要な毎月の投入額', () => {
   it('逆算した額で回すと、ちょうどその月数で届く', () => {
     const months = 120
-    const pmt = requiredMonthly(plan, ***, months)
-    expect(monthsToGoal(plan, ***, pmt)).toBeCloseTo(months, 6)
+    const pmt = requiredMonthly(plan, 6_365_266, months)
+    expect(monthsToGoal(plan, 6_365_266, pmt)).toBeCloseTo(months, 6)
   })
 
   it('複利だけで届くなら 0（マイナスを返さない）', () => {
@@ -62,7 +62,7 @@ describe('必要な毎月の投入額', () => {
 describe('実績の年率', () => {
   it('外部フローと期末評価額から金額加重で解く', () => {
     const r = moneyWeightedReturn(txns, snap.totalJpy, snap.asOf)
-    expect(r).toBeCloseTo(0.2258, 4)
+    expect(r).toBeCloseTo(0.1774, 4)
   })
 
   it('評価日が不明なら計算しない — 今日で代用しない', () => {
@@ -78,7 +78,7 @@ describe('実測の資産曲線', () => {
   it('取り込むたびに1点ずつ増え、同じ日は上書きする', () => {
     const file = { name: SNAPSHOT_FILE, text: snapshotCsv(), importedAt: '' }
     const once = withValuePoint(EMPTY, file)
-    expect(once.valuePoints).toEqual([{ on: '2026-08-29', totalJpy: *** }])
+    expect(once.valuePoints).toEqual([{ on: '2026-08-29', totalJpy: 6_365_266 }])
     // 同じファイルをもう一度落としても点は増えない
     expect(withValuePoint(once, file).valuePoints).toEqual(once.valuePoints)
   })
@@ -91,9 +91,9 @@ describe('実測の資産曲線', () => {
   it('取り込み直後はまだ保存前なので、今のスナップショットを優先する', () => {
     const s = valueSeries(
       [{ on: '2026-08-29', totalJpy: 1 }],
-      { asOf: '2026-08-29', totalJpy: *** },
+      { asOf: '2026-08-29', totalJpy: 6_365_266 },
     )
     expect(s).toHaveLength(1)
-    expect(s[0]?.jpy).toBe(***)
+    expect(s[0]?.jpy).toBe(6_365_266)
   })
 })
