@@ -2,14 +2,17 @@
   "timeZone": "Asia/Tokyo",
   "dependencies": {
     "enabledAdvancedServices": [
-      { "userSymbol": "Gmail", "serviceId": "gmail", "version": "v1" }
+      {
+        "userSymbol": "Gmail",
+        "serviceId": "gmail",
+        "version": "v1"
+      }
     ]
   },
   "exceptionLogging": "STACKDRIVER",
   "runtimeVersion": "V8",
   "oauthScopes": [
     "https://www.googleapis.com/auth/spreadsheets.currentonly",
-    "https://www.googleapis.com/auth/script.external_request",
     "https://www.googleapis.com/auth/gmail.readonly"
   ],
   "webapp": {

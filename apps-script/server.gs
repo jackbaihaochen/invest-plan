@@ -23,6 +23,23 @@
 
 var SHEETS = ['txns', 'positions', 'entries', 'values', 'meta']
 
+/**
+ * 対象のスプレッドシート。
+ *
+ * 通常はコンテナ（このスクリプトが紐づいている表）で足りる。ただし doGet/doPost の
+ * 文脈で getActiveSpreadsheet() が null を返す例が報告されていて、こちらでは
+ * 再現も否定もできなかった。**確かめられないことは、確かめられない前提のまま
+ * 逃げ道を用意しておく。** スクリプト プロパティに SHEET_ID を入れればそちらを使う
+ * （そのときは appsscript.json の spreadsheets.currentonly を spreadsheets に広げる）。
+ */
+function book() {
+  var id = PropertiesService.getScriptProperties().getProperty('SHEET_ID')
+  if (id) return SpreadsheetApp.openById(id)
+  var ss = SpreadsheetApp.getActiveSpreadsheet()
+  if (!ss) throw new Error('スプレッドシートに到達できません（SHEET_ID を設定してください）')
+  return ss
+}
+
 /* ── トークン ───────────────────────────────────────── */
 
 /** 早期 return しない比較。長さの差だけは漏れるが内容は漏らさない。 */
@@ -91,7 +108,7 @@ function sheetByName(ss, name) {
 }
 
 function loadTables() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet()
+  var ss = book()
   var tables = {}
   for (var i = 0; i < SHEETS.length; i++) {
     var name = SHEETS[i]
@@ -119,7 +136,7 @@ function normalizeRow(row) {
 
 function saveTables(payload) {
   var tables = (payload && payload.tables) || {}
-  var ss = SpreadsheetApp.getActiveSpreadsheet()
+  var ss = book()
   // 一度に書く側と読む側がぶつかると半端な状態を読ませてしまう。
   var lock = LockService.getScriptLock()
   lock.waitLock(20000)
@@ -182,7 +199,7 @@ function updatePrices() {
   }
   if (rows.length === 0) return
 
-  var ss = SpreadsheetApp.getActiveSpreadsheet()
+  var ss = book()
   var sh = sheetByName(ss, 'prices')
   if (sh.getLastRow() === 0) {
     sh.getRange(1, 1, 1, 3).setValues([['on', 'fund', 'navJpy']])
