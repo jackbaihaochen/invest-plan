@@ -1,0 +1,197 @@
+:root {
+  color-scheme: light;
+
+  --bg: #eef7fb;
+  --bg-2: #fdfdff;
+  --card: #ffffff;
+  --ink: #10313f;
+  --muted: #6a8797;
+  --line: #dcecf3;
+  --accent: #0284c7;
+  --accent-soft: #e3f4fd;
+  --good: #0e9f6e;
+  --good-soft: #e2f8ef;
+  --bad: #e11d48;
+  --bad-soft: #fdeaef;
+  --warn: #d97706;
+  --warn-soft: #fdf3e2;
+  --pending: #9fbccd;
+
+  /* グラフの色。ここ一箇所で持つ — 図の中に色を書かない。 */
+  --c1: #0284c7;
+  --c2: #06b6d4;
+  --c3: #f59e0b;
+  --c4: #10b981;
+  --c5: #8b5cf6;
+  --c6: #f43f5e;
+
+  --radius: 16px;
+  --shadow: 0 1px 2px rgba(16, 49, 63, 0.04), 0 10px 26px -18px rgba(2, 132, 199, 0.45);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: linear-gradient(170deg, var(--bg) 0%, var(--bg-2) 46%, var(--bg) 100%);
+  background-attachment: fixed;
+  color: var(--ink);
+  font: 15px/1.6 -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Noto Sans JP',
+    'PingFang SC', 'Microsoft YaHei', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.app {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 20px 16px calc(36px + env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 18px;
+  box-shadow: var(--shadow);
+}
+
+.card h2 {
+  margin: 0 0 12px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.num { font-variant-numeric: tabular-nums; }
+.big { font-size: 30px; font-weight: 700; line-height: 1.15; }
+.huge { font-size: 38px; font-weight: 700; line-height: 1.1; letter-spacing: -0.02em; }
+.muted { color: var(--muted); }
+.small { font-size: 12px; }
+.good { color: var(--good); }
+.bad { color: var(--bad); }
+.warn { color: var(--warn); }
+.row { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.stack { display: flex; flex-direction: column; gap: 4px; }
+
+/* ── 今月の環 ───────────────────────────────────────── */
+.ring-wrap { display: flex; align-items: center; gap: 18px; }
+.ring { flex: 0 0 auto; }
+.ring-hole { font-size: 15px; font-weight: 700; }
+
+button {
+  white-space: nowrap;
+  font: inherit;
+  border-radius: 11px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--ink);
+  padding: 9px 14px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+button:hover { border-color: var(--accent); color: var(--accent); }
+button.primary {
+  background: linear-gradient(135deg, var(--accent), #0ea5e9);
+  border-color: transparent;
+  color: #fff;
+  font-weight: 600;
+  padding: 13px 18px;
+  width: 100%;
+  font-size: 16px;
+  box-shadow: 0 6px 16px -8px rgba(2, 132, 199, 0.8);
+}
+button.primary:hover { color: #fff; filter: brightness(1.06); }
+button.primary:disabled { opacity: 0.45; cursor: default; filter: none; }
+button.ghost { padding: 5px 10px; font-size: 12px; }
+button.ghost.on {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+input, select {
+  font: inherit;
+  padding: 9px 11px;
+  border-radius: 11px;
+  border: 1px solid var(--line);
+  background: var(--bg-2);
+  color: var(--ink);
+  width: 100%;
+}
+input:focus, select:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
+
+.field { display: flex; flex-direction: column; gap: 5px; }
+.field label { font-size: 12px; color: var(--muted); }
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+/* ── 取り込み ───────────────────────────────────────── */
+.drop {
+  border: 2px dashed var(--line);
+  border-radius: var(--radius);
+  padding: 26px 16px;
+  text-align: center;
+  color: var(--muted);
+  background: var(--card);
+}
+.drop.over { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th, td { padding: 7px 8px; text-align: left; border-bottom: 1px solid var(--line); }
+tr:last-child td { border-bottom: none; }
+th { color: var(--muted); font-weight: 600; font-size: 11px; letter-spacing: 0.03em; }
+td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; }
+.scroll-x { overflow-x: auto; }
+
+.tag {
+  display: inline-block;
+  font-size: 11px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  white-space: nowrap;
+}
+.tag.inflow { color: var(--good); border-color: currentColor; }
+.tag.outflow { color: var(--bad); border-color: currentColor; }
+.tag.income { color: var(--accent); border-color: currentColor; }
+.tag.pending { color: var(--pending); border-color: currentColor; }
+.tag.unmatched { color: var(--bad); border-color: currentColor; }
+
+.banner {
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-size: 13px;
+  border: 1px solid transparent;
+}
+.banner.bad { color: var(--bad); background: var(--bad-soft); border-color: #f7c6d1; }
+.banner.warn { color: var(--warn); background: var(--warn-soft); border-color: #f3ddb4; }
+.banner.good { color: var(--good); background: var(--good-soft); border-color: #b9e9d5; }
+
+/* 0 を境に上下へ伸ばす。align-self を使うと縦並びでは幅の指定になり、
+   中身が空の div は幅 0 になって何も描かれない。 */
+.bars { display: flex; align-items: stretch; gap: 3px; height: 110px; }
+.bar-col { flex: 1; display: flex; flex-direction: column; }
+.bar-up { display: flex; align-items: flex-end; }
+.bar-down { border-top: 1px solid var(--line); }
+.bar-up > div, .bar-down > div { width: 100%; border-radius: 3px; }
+.bar-up > div { border-radius: 3px 3px 0 0; }
+.bar-down > div { border-radius: 0 0 3px 3px; }
+
+/* ── 成長のグラフ ───────────────────────────────────── */
+.legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12px; color: var(--muted); }
+.legend i {
+  display: inline-block; width: 14px; height: 3px; border-radius: 2px;
+  margin-right: 6px; vertical-align: middle;
+}
+.legend i.dot { width: 9px; height: 9px; border-radius: 50%; }
+
+/* 投入 / 収益 の内訳バー */
+.split { display: flex; height: 30px; border-radius: 8px; overflow: hidden; }
+.split > div { display: flex; align-items: center; justify-content: center; color: #fff;
+  font-size: 12px; font-weight: 600; }
