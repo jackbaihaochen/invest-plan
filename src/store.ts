@@ -1,6 +1,7 @@
 import type { Entry } from './domain/contribution'
 import type { ValuePoint } from './domain/growth'
-import { parseSnapshot } from './domain/holdings'
+import { type Dataset, datasetFromFiles } from './domain/model'
+import { type Tables, datasetToTables, tablesToDataset } from './sync/table'
 
 export interface Settings {
   goalJpy: number
@@ -21,42 +22,97 @@ export const DEFAULT_SETTINGS: Settings = {
   ringTargetJpy: null,
 }
 
-/** 取り込んだ CSV は生のまま持つ。解析を直したら過去の取り込みにも効く。 */
+/** 取り込んだ CSV は生のまま持つ。解析を直したとき、取り込み直しの手間で済む。 */
 export interface RawFile {
   name: string
   text: string
   importedAt: string
 }
 
-export type { ValuePoint }
+export type FileKind = 'snapshot' | 'historyJp' | 'historyUs'
+export type Files = Partial<Record<FileKind, RawFile>>
 
 export interface Store {
+  version: 2
+  files: Files
+  /**
+   * データ本体。Sheet と同じ形（表）で持つ。
+   *
+   * 解析結果ではなく CSV から毎回組み直していたのを改めた —— 第3段階では
+   * 別の端末から「行」として降ってくるので、そちらに CSV は存在しない。
+   * 代償は proposal §5 のとおり: 解析器を直しても過去のぶんは自動では直らない。
+   */
+  tables: Tables | null
+  settings: Settings
+  /** Apps Script の /exec。秘密ではないので、ここに置いてよい。 */
+  execUrl: string
+  /**
+   * 最後にサーバと一致した時刻。つながらないときは、この日時を添えて
+   * 手元の写しを出す —— 黙って古い数字を見せないための材料。
+   */
+  lastSyncedAt: string | null
+}
+
+export const EMPTY: Store = {
+  version: 2, files: {}, tables: null, settings: DEFAULT_SETTINGS,
+  execUrl: '', lastSyncedAt: null,
+}
+
+const KEY = 'invest-plan/v1'
+/** トークンは別のキーに置く。設定を書き出すような操作で巻き添えにしないため。 */
+const TOKEN_KEY = 'invest-plan/token'
+
+/* ── 保存と読み出し ─────────────────────────────────── */
+
+interface StoreV1 {
   version: 1
   snapshot?: RawFile
   historyJp?: RawFile
   historyUs?: RawFile
-  entries: Entry[]
-  valuePoints: ValuePoint[]
-  settings: Settings
+  entries?: Entry[]
+  valuePoints?: ValuePoint[]
+  settings?: Partial<Settings>
 }
 
-export const EMPTY: Store = { version: 1, entries: [], valuePoints: [], settings: DEFAULT_SETTINGS }
+/**
+ * v1（CSV と記録をばらばらに持っていた形）から v2 へ。
+ *
+ * **version が違うからと EMPTY を返してはいけない。** それはユーザーが記録した
+ * 投入と、取り込み直せない過去の実測点を黙って捨てるということ。
+ */
+function migrateV1(old: StoreV1): Store {
+  const files: Files = {}
+  if (old.snapshot) files.snapshot = old.snapshot
+  if (old.historyJp) files.historyJp = old.historyJp
+  if (old.historyUs) files.historyUs = old.historyUs
 
-const KEY = 'invest-plan/v1'
+  const dataset = datasetFromFiles(files, old.entries ?? [], old.valuePoints ?? [])
+  return {
+    version: 2,
+    files,
+    tables: datasetToTables(dataset),
+    settings: { ...DEFAULT_SETTINGS, ...old.settings },
+    execUrl: '',
+    lastSyncedAt: null,
+  }
+}
 
 export function load(): Store {
   try {
     const raw = localStorage.getItem(KEY)
     if (!raw) return EMPTY
-    const parsed = JSON.parse(raw) as Partial<Store>
-    if (parsed.version !== 1) return EMPTY
+    const parsed = JSON.parse(raw) as Partial<Store> & Partial<StoreV1>
+    if (parsed.version === 1) return migrateV1(parsed as StoreV1)
+    if (parsed.version !== 2) return EMPTY
     return {
       ...EMPTY,
-      ...parsed,
-      version: 1,
-      entries: parsed.entries ?? [],
-      valuePoints: parsed.valuePoints ?? [],
+      ...(parsed as Store),
+      version: 2,
+      files: parsed.files ?? {},
+      tables: parsed.tables ?? null,
       settings: { ...DEFAULT_SETTINGS, ...parsed.settings },
+      execUrl: parsed.execUrl ?? '',
+      lastSyncedAt: parsed.lastSyncedAt ?? null,
     }
   } catch {
     // プライベートウィンドウやサイトデータ遮断では読み書きが例外を投げる。
@@ -72,32 +128,48 @@ export function save(store: Store): void {
   }
 }
 
-/**
- * 保有商品 CSV を取り込むたびに、その日の総資産を1点だけ残す。
- *
- * version は上げない。上げると load() が EMPTY を返し、取り込み済みの
- * CSV と手動記録がまとめて消える。増える項目は既定値で足りる。
- */
-export function withValuePoint(store: Store, file: RawFile): Store {
-  let point: ValuePoint
+export const loadToken = (): string => {
+  try { return localStorage.getItem(TOKEN_KEY) ?? '' } catch { return '' }
+}
+
+export const saveToken = (token: string): void => {
   try {
-    const snap = parseSnapshot(file.text, file.name)
-    // 日付が読めないものは記録しない。時系列に置き場所が無い。
-    if (snap.asOf === null) return store
-    point = { on: snap.asOf, totalJpy: snap.totalJpy }
-  } catch {
-    return store
-  }
-  const rest = store.valuePoints.filter((p) => p.on !== point.on)
-  return { ...store, valuePoints: [...rest, point].sort((a, b) => a.on.localeCompare(b.on)) }
+    if (token) localStorage.setItem(TOKEN_KEY, token)
+    else localStorage.removeItem(TOKEN_KEY)
+  } catch { /* 同上 */ }
+}
+
+/* ── Dataset との橋渡し ─────────────────────────────── */
+
+export const datasetOf = (store: Store): Dataset =>
+  store.tables ? tablesToDataset(store.tables) : datasetFromFiles(store.files, [], [])
+
+export const withDataset = (store: Store, dataset: Dataset): Store =>
+  ({ ...store, tables: datasetToTables(dataset) })
+
+/**
+ * CSV を取り込む。記録と実測点は今のデータから引き継ぐ ——
+ * 取り込みは「相場と取引の事実」を差し替えるだけで、手で書いたものには触らない。
+ */
+export function withImport(store: Store, kind: FileKind, file: RawFile): Store {
+  const files = { ...store.files, [kind]: file }
+  const current = datasetOf(store)
+  const next = datasetFromFiles(files, current.entries, current.valuePoints)
+
+  // 取り込んだ日の総資産を1点だけ残す。日付が読めないものは記録しない。
+  const asOf = next.snapshot?.asOf
+  const valuePoints = asOf
+    ? [...current.valuePoints.filter((p) => p.on !== asOf),
+      { on: asOf, totalJpy: next.snapshot!.totalJpy }].sort((a, b) => a.on.localeCompare(b.on))
+    : current.valuePoints
+
+  return { ...store, files, tables: datasetToTables({ ...next, valuePoints }) }
 }
 
 /**
  * どのファイルかは名前ではなく中身で見分ける。楽天のファイル名は
  * ダウンロードのたびに連番が付くし、名前を変えられても壊れないほうがいい。
  */
-export type FileKind = 'snapshot' | 'historyJp' | 'historyUs'
-
 export function detectKind(text: string): FileKind | null {
   const head = text.slice(0, 4000)
   if (/(^|\n)"?種別"?,/.test(head) || head.includes('保有商品詳細')) return 'snapshot'

@@ -10,15 +10,69 @@ import { coverageEnd, monthlyNet, parseTransactions, totalNet } from './transact
 import type { Snapshot, Txn } from './types'
 import { type CategoryTotal, categoryTotals, nisaUsage, staleShare } from './valuation'
 
-export interface Sources {
+/**
+ * 解析済みのデータ。モデルはここから組む。
+ *
+ * 生の CSV を受け取らないのは、第3段階で Sheet から来るのが行だからで、
+ * その経路では CSV というものが存在しない。取り込み経路は datasetFromFiles が
+ * 受け持ち、モデルは「どこから来たか」を知らない。
+ */
+export interface Dataset {
+  snapshot: Snapshot | null
+  txns: Txn[]
+  entries: readonly Entry[]
+  valuePoints: readonly ValuePoint[]
+  /** 解析に失敗したファイルの説明。握り潰さず画面に出す。 */
+  problems: string[]
+}
+
+export const EMPTY_DATASET: Dataset = {
+  snapshot: null, txns: [], entries: [], valuePoints: [], problems: [],
+}
+
+/** 中身が何も無いか。「サーバは空か」を判断して移行の分岐に使う。 */
+export const isEmptyDataset = (d: Dataset): boolean =>
+  d.snapshot === null && d.txns.length === 0
+  && d.entries.length === 0 && d.valuePoints.length === 0
+
+export interface RawFiles {
   snapshot?: { name: string; text: string }
   historyJp?: { name: string; text: string }
   historyUs?: { name: string; text: string }
-  entries: readonly Entry[]
-  valuePoints: readonly ValuePoint[]
+}
+
+export interface Options {
   plan: Plan
   plannedMonthlyJpy: number
   ringTargetJpy: number | null
+}
+
+/** 楽天の CSV を解析して Dataset にする。失敗は problems に落とし、例外にしない。 */
+export function datasetFromFiles(
+  files: RawFiles, entries: readonly Entry[], valuePoints: readonly ValuePoint[],
+): Dataset {
+  const problems: string[] = []
+
+  let snapshot: Snapshot | null = null
+  if (files.snapshot) {
+    try {
+      snapshot = parseSnapshot(files.snapshot.text, files.snapshot.name)
+    } catch (e) {
+      problems.push(`保有商品 CSV を読めません: ${(e as Error).message}`)
+    }
+  }
+
+  const txns: Txn[] = []
+  for (const [source, file] of [['JP', files.historyJp], ['US', files.historyUs]] as const) {
+    if (!file) continue
+    try {
+      txns.push(...parseTransactions(file.text, source))
+    } catch (e) {
+      problems.push(`${source} の取引履歴を読めません: ${(e as Error).message}`)
+    }
+  }
+
+  return { snapshot, txns, entries, valuePoints, problems }
 }
 
 export interface Model {
@@ -70,35 +124,17 @@ export interface Model {
 
 const ymOf = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
 
-export function buildModel(src: Sources, now = new Date()): Model {
-  const problems: string[] = []
-
-  let snapshot: Snapshot | null = null
-  if (src.snapshot) {
-    try {
-      snapshot = parseSnapshot(src.snapshot.text, src.snapshot.name)
-    } catch (e) {
-      problems.push(`保有商品 CSV を読めません: ${(e as Error).message}`)
-    }
-  }
-
-  const txns: Txn[] = []
-  for (const [source, file] of [['JP', src.historyJp], ['US', src.historyUs]] as const) {
-    if (!file) continue
-    try {
-      txns.push(...parseTransactions(file.text, source))
-    } catch (e) {
-      problems.push(`${source} の取引履歴を読めません: ${(e as Error).message}`)
-    }
-  }
+export function buildModel(data: Dataset, opts: Options, now = new Date()): Model {
+  const { snapshot, txns } = data
+  const problems = [...data.problems]
 
   const end = coverageEnd(txns)
-  const resolved = resolveEntries(src.entries, txns, end)
+  const resolved = resolveEntries(data.entries, txns, end)
   const monthly = monthlyNet(txns)
 
   const ym = ymOf(now)
   const month = monthContribution(ym, txns, resolved)
-  const targetJpy = src.ringTargetJpy ?? medianRecentNet(monthly)
+  const targetJpy = opts.ringTargetJpy ?? medianRecentNet(monthly)
   const daysLeft = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate() - now.getDate()
 
   // 資産の締めはスナップショットの日付。取引履歴の締めとは別で、
@@ -114,8 +150,8 @@ export function buildModel(src: Sources, now = new Date()): Model {
 
   // 見通しは実際に積み上がった速度（平均）、環は勝てる目標（中央値）。別の問い。
   const recentPaceJpy = meanRecentNet(monthly)
-  const atPaceMonths = wholeMonthsToGoal(src.plan, totalAssetsJpy, recentPaceJpy)
-  const atPlanMonths = wholeMonthsToGoal(src.plan, totalAssetsJpy, src.plannedMonthlyJpy)
+  const atPaceMonths = wholeMonthsToGoal(opts.plan, totalAssetsJpy, recentPaceJpy)
+  const atPlanMonths = wholeMonthsToGoal(opts.plan, totalAssetsJpy, opts.plannedMonthlyJpy)
 
   return {
     snapshot, txns, coverageEnd: end, resolved, monthly,
@@ -131,11 +167,11 @@ export function buildModel(src: Sources, now = new Date()): Model {
     recentPaceJpy,
     atPaceMonths,
     atPlanMonths,
-    behindMonths: monthsBehindPlan(src.plan, totalAssetsJpy, recentPaceJpy, src.plannedMonthlyJpy),
-    atPaceDate: goalDate(src.plan, totalAssetsJpy, recentPaceJpy, now),
-    atPlanDate: goalDate(src.plan, totalAssetsJpy, src.plannedMonthlyJpy, now),
+    behindMonths: monthsBehindPlan(opts.plan, totalAssetsJpy, recentPaceJpy, opts.plannedMonthlyJpy),
+    atPaceDate: goalDate(opts.plan, totalAssetsJpy, recentPaceJpy, now),
+    atPlanDate: goalDate(opts.plan, totalAssetsJpy, opts.plannedMonthlyJpy, now),
     principal: principalSeries(txns),
-    values: valueSeries(src.valuePoints, snapshot),
+    values: valueSeries(data.valuePoints, snapshot),
     mwr: snapshot ? moneyWeightedReturn(txns, snapshot.totalJpy, snapshot.asOf) : null,
     categories: snapshot ? categoryTotals(snapshot) : [],
     staleShare: snapshot ? staleShare(snapshot) : 0,

@@ -7,6 +7,7 @@
 |---|---|
 | [decisions.md](decisions.md) | 设计决策与理由，按时间追加 |
 | [deploy.md](deploy.md) | GitHub Pages 的配信方式，和这一阶段还解不掉的限制 |
+| [sheet-setup.md](sheet-setup.md) | Google Sheet + Apps Script 的一次性配置步骤 |
 | [changes/](changes/) | 每个改动一个目录：`proposal.md`（A 类改动，需批准）+ `tasks.md`（任务清单） |
 | [../NOTES-background.md](../NOTES-background.md) | 上一版实现（已废弃）留下的经验教训与对账锚点 |
 

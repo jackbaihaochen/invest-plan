@@ -13,11 +13,12 @@
 用户实机确认可打开并能上传 CSV）。仓库保持公开：配信物里没有任何交易数据，
 测试夹具也是作り物。
 
-下一步：第 3 阶段 Sheet + Apps Script + 基準価額メール。方针已变更 ——
-Sheet 设为「仅自己」，**读也走 Apps Script 的令牌**（原方案是读走公开端点）。
-这推翻了 decisions.md 里的一条已记决策，要先写 A 类差分再动手。
+第 3 阶段代码已写完，**通信层已实测通过**（POST `text/plain` 可用，见 proposal §4）。
+下一步是用户按 [docs/sheet-setup.md](docs/sheet-setup.md) 第 1〜3 段完成配置。
+本地模式不受影响，没配同步就和第 2 阶段一样用。
 
-**Blockers**：无（CSV 已拿到并验证，见 proposal §8）。等提案批准即可开工。
+**Blockers**：无。等用户完成 Sheet / Apps Script / 触发器的一次性配置。
+配置完成前，`updatePrices`（基準価額メール）和多设备同步都还没在真实环境跑过。
 
 ---
 
@@ -31,8 +32,10 @@ Sheet 设为「仅自己」，**读也走 Apps Script 的令牌**（原方案是
 - [x] 手动记录与 CSV 的对账（coverageEnd 接缝 + 匹配规则）
 - [x] 交易一览（可按 入金/出金/口座内/収益 筛选）+ 分类饼图
 - [ ] 各分类の取得原価の推移（銘柄ごとの平均取得原価で戻す必要あり）
-- [ ] Google Sheet 读路径 + 数据模型
-- [ ] Apps Script 写端点（令牌鉴权）
+- [x] `sheet-backend` 提案（A 类，已批准）
+- [x] spike：跨域调用 Apps Script 的传输层验证（`text/plain` 通、`application/json` 不通）
+- [x] Google Sheet 读写（经 Apps Script，Sheet 设为「仅自己」，令牌鉴权）
+- [x] 存储格式 v1→v2 迁移（手动记录和实测点不丢）
 - [ ] Apps Script 日次触发器：基準価額メール → prices 表
 - [x] 投入记录与月度进度环
 - [x] 成長グラフ（累计投入の線 + 実測値の点 + 1億までの見通し）
@@ -42,6 +45,27 @@ Sheet 设为「仅自己」，**读也走 Apps Script 的令牌**（原方案是
 ---
 
 ## Completed
+
+### 2026-09-03 · 第 3 阶段：Sheet 同步（代码完成，等 spike）
+`src/sync/{table,remote}.ts` + `src/ui/Sync.tsx` + `apps-script/{server.gs,appsscript.json}`，67 项测试。
+
+**模型和「原始 CSV」解耦**：`buildModel` 现在吃 `Dataset`（解析后的行），
+`datasetFromFiles` 负责取入口。第 3 阶段的数据从 Sheet 以「行」的形式降下来，
+那条路上根本没有 CSV 这个东西。
+
+**服务端不懂业务**：客户端送 `{header, rows}`，Apps Script 照着写进表，不解释列的意思。
+好处是改 schema 不用动服务端，而且直接打开 Sheet 人也能读。往返无损有 9 项测试守着，
+包括「列增加了也不炸」和「Sheets 把日期变成 Date 也读得回来」。
+
+**v1→v2 迁移**：`version` 不同就返回 EMPTY 是最省事也最糟的做法 ——
+那等于把用户手记的投入和补不回来的实测点悄悄扔掉。写了迁移并用真实的 v1 数据在浏览器里实测：
+215 笔交易、手动记录连备注、实测点、改过的年率、原始 CSV 全部留存，存储收敛到 v2。
+
+**连不上时不白屏**：实测用一个不存在的 URL 配置同步，页面照常显示本机数据，
+顶部写明「连不上服务器（…）· 这台设备还没同步过」。这是第 2 节里丢掉的那条
+「读不依赖 Apps Script」的补偿。
+
+未验证：跨域通信本身。见 Blockers。
 
 ### 2026-09-03 · 第 2 阶段完成，站点上线
 https://jackbaihaochen.github.io/invest-plan/ で公開。初回は deploy が 404 で落ちた

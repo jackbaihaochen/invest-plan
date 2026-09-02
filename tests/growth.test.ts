@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   moneyWeightedReturn, principalSeries, projectionSeries, requiredMonthly, valueSeries,
 } from '../src/domain/growth'
-import { EMPTY, withValuePoint } from '../src/store'
+import { EMPTY, datasetOf, withDataset, withImport } from '../src/store'
 import { monthsToGoal } from '../src/domain/projection'
 import { parseSnapshot } from '../src/domain/holdings'
 import { parseTransactions, totalNet } from '../src/domain/transactions'
@@ -77,15 +77,31 @@ describe('実績の年率', () => {
 describe('実測の資産曲線', () => {
   it('取り込むたびに1点ずつ増え、同じ日は上書きする', () => {
     const file = { name: SNAPSHOT_FILE, text: snapshotCsv(), importedAt: '' }
-    const once = withValuePoint(EMPTY, file)
-    expect(once.valuePoints).toEqual([{ on: '2026-08-29', totalJpy: 6_365_266 }])
+    const once = withImport(EMPTY, 'snapshot', file)
+    expect(datasetOf(once).valuePoints).toEqual([{ on: '2026-08-29', totalJpy: 6_365_266 }])
     // 同じファイルをもう一度落としても点は増えない
-    expect(withValuePoint(once, file).valuePoints).toEqual(once.valuePoints)
+    expect(datasetOf(withImport(once, 'snapshot', file)).valuePoints)
+      .toEqual(datasetOf(once).valuePoints)
   })
 
   it('日付を読めないファイルは記録しない — 時系列に置き場所がない', () => {
     const file = { name: 'snapshot.csv', text: snapshotCsv(), importedAt: '' }
-    expect(withValuePoint(EMPTY, file).valuePoints).toEqual([])
+    expect(datasetOf(withImport(EMPTY, 'snapshot', file)).valuePoints).toEqual([])
+  })
+
+  it('CSV を取り込んでも手で記録したものは消えない', () => {
+    const file = { name: SNAPSHOT_FILE, text: snapshotCsv(), importedAt: '' }
+    const base = withImport(EMPTY, 'snapshot', file)
+    const withEntry = withDataset(base, {
+      ...datasetOf(base),
+      entries: [{ id: 'a', on: '2026-09-01', amountJpy: 50_000, note: 'メモ' }],
+    })
+
+    // 取り込みは「相場と取引の事実」を差し替えるだけ。手書きのものには触らない。
+    const after = datasetOf(withImport(withEntry, 'snapshot', file))
+    expect(after.entries).toHaveLength(1)
+    expect(after.entries[0]?.amountJpy).toBe(50_000)
+    expect(after.entries[0]?.note).toBe('メモ')
   })
 
   it('取り込み直後はまだ保存前なので、今のスナップショットを優先する', () => {
