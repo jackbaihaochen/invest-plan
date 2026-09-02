@@ -49,6 +49,11 @@ describe('保有商品詳細の取り込み', () => {
     expect([...counts.values()].filter((n) => n > 1)).toEqual([2])
   })
 
+  it('ファイル名から日付を読めなければ null にする — 今日に倒さない', () => {
+    // 今日に倒すと、何ヶ月も前の評価額を最新のものとして見せてしまう。
+    expect(parseSnapshot(snapshotCsv(), 'snapshot.csv').asOf).toBeNull()
+  })
+
   it('参考為替レートを拾う', () => {
     expect(snap.fx['米ドル']).toBe(160.06)
   })

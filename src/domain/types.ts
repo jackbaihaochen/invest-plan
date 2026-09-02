@@ -15,7 +15,8 @@ export interface Position {
 }
 
 export interface Snapshot {
-  asOf: string                     // YYYY-MM-DD
+  /** ファイル名から読んだ取得日。読めなければ null（今日に倒さない）。 */
+  asOf: string | null
   positions: Position[]
   cashJpy: number                  // 預り金合計（預り金 + 信用保証金）
   totalJpy: number                 // 資産合計（CSV 記載値）

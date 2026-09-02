@@ -1,4 +1,4 @@
-import { at, parseCsv, toAmount, toIsoDate, toNumber } from './csv'
+import { at, parseCsv, toAmount, toNumber } from './csv'
 import type { Position, Snapshot } from './types'
 
 /**
@@ -80,9 +80,13 @@ function parseFx(rows: string[][]): Record<string, number> {
   return fx
 }
 
-/** 明細に日付欄がないので、ファイル名の 20260829 から取る。 */
-function asOfFrom(fileName: string): string {
+/**
+ * 明細に日付欄がないので、ファイル名の 20260829 から取る。
+ *
+ * 読めなければ null。今日に倒してはいけない —— 古い評価額を最新のものとして
+ * 見せることになり、この道具がいちばんやってはいけないことになる。
+ */
+function asOfFrom(fileName: string): string | null {
   const m = /(\d{4})(\d{2})(\d{2})/.exec(fileName)
-  if (m) return `${m[1]}-${m[2]}-${m[3]}`
-  return toIsoDate(new Date().toLocaleDateString('en-CA').replace(/-/g, '/')) ?? ''
+  return m ? `${m[1]}-${m[2]}-${m[3]}` : null
 }
