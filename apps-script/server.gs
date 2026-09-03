@@ -21,7 +21,17 @@
  *      読むだけのはずが削除も送信もできる鍵を渡すことになる。
  */
 
-var SHEETS = ['txns', 'positions', 'entries', 'values', 'meta']
+/** 画面に返す表。prices はトリガーが育てるので読むだけ。 */
+var READ_SHEETS = ['txns', 'positions', 'entries', 'values', 'prices', 'meta']
+
+/**
+ * クライアントが書ける表。**prices を入れてはいけない。**
+ *
+ * 画面は保存のたびにデータ全体を送ってくる。その中の prices は「ページを開いた時点の
+ * 写し」でしかないので、そのまま書き戻すと、その後トリガーが足した行を消してしまう。
+ * 設定直後（画面側の prices が空）なら、蓄積ぶんを丸ごと消す。
+ */
+var WRITE_SHEETS = ['txns', 'positions', 'entries', 'values', 'meta']
 
 /**
  * 対象のスプレッドシート。
@@ -110,8 +120,8 @@ function sheetByName(ss, name) {
 function loadTables() {
   var ss = book()
   var tables = {}
-  for (var i = 0; i < SHEETS.length; i++) {
-    var name = SHEETS[i]
+  for (var i = 0; i < READ_SHEETS.length; i++) {
+    var name = READ_SHEETS[i]
     var sh = ss.getSheetByName(name)
     if (!sh || sh.getLastRow() === 0) { tables[name] = { header: [], rows: [] }; continue }
     var values = sh.getDataRange().getValues()
@@ -141,8 +151,8 @@ function saveTables(payload) {
   var lock = LockService.getScriptLock()
   lock.waitLock(20000)
   try {
-    for (var i = 0; i < SHEETS.length; i++) {
-      var name = SHEETS[i]
+    for (var i = 0; i < WRITE_SHEETS.length; i++) {
+      var name = WRITE_SHEETS[i]
       var t = tables[name]
       if (!t) continue // 送られてこなかったシートは触らない
       writeTable(sheetByName(ss, name), t)

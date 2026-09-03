@@ -9,11 +9,17 @@ const entries = [
 ]
 const valuePoints = [{ on: '2026-08-29', totalJpy: 6_365_266 }]
 
-const data = datasetFromFiles({
+const prices = [
+  { on: '2026-09-02', fund: 'eMAXIS　Slim　全世界株式（オール・カントリー） (三菱ＵＦＪアセットマネジメント)', navJpy: 39_000 },
+  { on: '2026-09-02', fund: 'eMAXIS　Slim　米国株式（S&P500） (三菱ＵＦＪアセットマネジメント)', navJpy: 46_000 },
+]
+
+const base = datasetFromFiles({
   snapshot: { name: SNAPSHOT_FILE, text: snapshotCsv() },
   historyJp: { name: 'jp.csv', text: jpHistoryCsv() },
   historyUs: { name: 'us.csv', text: usHistoryCsv() },
 }, entries, valuePoints)
+const data = { ...base, prices }
 
 describe('Sheet との相互変換', () => {
   const back = tablesToDataset(datasetToTables(data))
@@ -38,6 +44,11 @@ describe('Sheet との相互変換', () => {
 
   it('実測点も往復する', () => {
     expect(back.valuePoints).toEqual(valuePoints)
+  })
+
+  it('基準価額も往復する — 全角のファンド名が崩れない', () => {
+    expect(back.prices).toEqual(prices)
+    expect(back.prices[0]?.fund).toContain('（オール・カントリー）')
   })
 
   it('列が増えても、知っている列だけ読んで壊れない', () => {

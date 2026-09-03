@@ -1,3 +1,4 @@
+import { type Repriced, normalizeFund } from './prices'
 import type { Position, Snapshot } from './types'
 
 export interface CategoryTotal {
@@ -10,14 +11,23 @@ export interface CategoryTotal {
 }
 
 /**
- * 日次で価格を追える種別。
- * 投資信託は基準価額メール、米国株は GOOGLEFINANCE、MMF は為替。
- * 金・プラチナは情報源がなく、国内株は TYO: が実測で空を返すので、
- * どちらも最後に取れた価格のまま据え置く。
+ * 「この種別は日次で追える」という固定の一覧は持たない。
+ *
+ * 以前は 投資信託・米国株式・外貨建MMF を live と決め打ちしていたが、実装されたのは
+ * 投資信託の基準価額メールだけで、米国株と MMF には値段を取る仕組みが無い。
+ * **持っていない鮮度を画面が主張していた** —— ファイル名から日付を読めないときに
+ * 今日へ倒していたのと同じ種類の嘘。実際に付け替えたかどうかだけを見る。
  */
-const LIVE_PRICE_KINDS = new Set(['投資信託', '米国株式', '外貨建MMF'])
-
-export function categoryTotals(snap: Snapshot): CategoryTotal[] {
+export function categoryTotals(snap: Snapshot, repriced?: Repriced | null): CategoryTotal[] {
+  const fresh = new Set(
+    repriced?.pricedOn
+      ? snap.positions
+        .filter((p) => p.kind === '投資信託'
+          && !repriced.missing.includes(p.name)
+          && !repriced.ambiguous.some((a) => normalizeFund(a) === normalizeFund(p.name)))
+        .map((p) => p.kind)
+      : [],
+  )
   const by = new Map<string, { marketValueJpy: number; costJpy: number }>()
   for (const p of snap.positions) {
     const t = by.get(p.kind) ?? { marketValueJpy: 0, costJpy: 0 }
@@ -31,14 +41,9 @@ export function categoryTotals(snap: Snapshot): CategoryTotal[] {
       kind,
       ...t,
       share: total === 0 ? 0 : t.marketValueJpy / total,
-      livePrice: LIVE_PRICE_KINDS.has(kind),
+      livePrice: fresh.has(kind),
     }))
     .sort((a, b) => b.marketValueJpy - a.marketValueJpy)
-}
-
-/** 価格を日次で追えない部分の割合。画面に「うち X% は N月N日時点」と出すため。 */
-export function staleShare(snap: Snapshot): number {
-  return categoryTotals(snap).filter((c) => !c.livePrice).reduce((a, c) => a + c.share, 0)
 }
 
 export const NISA_LIFETIME_LIMIT = 18_000_000

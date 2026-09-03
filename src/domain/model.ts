@@ -7,8 +7,9 @@ import {
 import { parseSnapshot } from './holdings'
 import { type Plan, goalDate, monthsBehindPlan, wholeMonthsToGoal } from './projection'
 import { coverageEnd, monthlyNet, parseTransactions, totalNet } from './transactions'
+import { type Repriced, type PriceRow, reprice } from './prices'
 import type { Snapshot, Txn } from './types'
-import { type CategoryTotal, categoryTotals, nisaUsage, staleShare } from './valuation'
+import { type CategoryTotal, categoryTotals, nisaUsage } from './valuation'
 
 /**
  * 解析済みのデータ。モデルはここから組む。
@@ -22,12 +23,14 @@ export interface Dataset {
   txns: Txn[]
   entries: readonly Entry[]
   valuePoints: readonly ValuePoint[]
+  /** 基準価額メールが積み上げた日次の価格。投資信託の評価額をこれで付け替える。 */
+  prices: readonly PriceRow[]
   /** 解析に失敗したファイルの説明。握り潰さず画面に出す。 */
   problems: string[]
 }
 
 export const EMPTY_DATASET: Dataset = {
-  snapshot: null, txns: [], entries: [], valuePoints: [], problems: [],
+  snapshot: null, txns: [], entries: [], valuePoints: [], prices: [], problems: [],
 }
 
 /** 中身が何も無いか。「サーバは空か」を判断して移行の分岐に使う。 */
@@ -72,7 +75,7 @@ export function datasetFromFiles(
     }
   }
 
-  return { snapshot, txns, entries, valuePoints, problems }
+  return { snapshot, txns, entries, valuePoints, prices: [], problems }
 }
 
 export interface Model {
@@ -116,6 +119,9 @@ export interface Model {
   mwr: number | null
 
   categories: CategoryTotal[]
+  /** 基準価額での付け替えの結果。いつの値段で、どれだけが当日値かを画面に出す。 */
+  repriced: Repriced | null
+  /** その日の値段が付いていない割合。1 − repricedShare。 */
   staleShare: number
   nisa: { usedJpy: number; limitJpy: number; share: number }
 
@@ -125,8 +131,14 @@ export interface Model {
 const ymOf = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
 
 export function buildModel(data: Dataset, opts: Options, now = new Date()): Model {
-  const { snapshot, txns } = data
+  const { txns } = data
   const problems = [...data.problems]
+
+  // 投資信託だけ、届いている中でいちばん新しい基準価額に付け替える。
+  // 以降の計算はすべてこの付け替え後のスナップショットを見る —— 見出しの総資産と
+  // グラフの最終点が別々の数字になるのを防ぐため。
+  const repriced = reprice(data.snapshot, data.prices)
+  const snapshot = repriced?.snapshot ?? data.snapshot
 
   const end = coverageEnd(txns)
   const resolved = resolveEntries(data.entries, txns, end)
@@ -173,8 +185,9 @@ export function buildModel(data: Dataset, opts: Options, now = new Date()): Mode
     principal: principalSeries(txns),
     values: valueSeries(data.valuePoints, snapshot),
     mwr: snapshot ? moneyWeightedReturn(txns, snapshot.totalJpy, snapshot.asOf) : null,
-    categories: snapshot ? categoryTotals(snapshot) : [],
-    staleShare: snapshot ? staleShare(snapshot) : 0,
+    categories: snapshot ? categoryTotals(snapshot, repriced) : [],
+    repriced,
+    staleShare: repriced ? 1 - repriced.repricedShare : (snapshot ? 1 : 0),
     nisa: snapshot ? nisaUsage(snapshot) : { usedJpy: 0, limitJpy: 18_000_000, share: 0 },
     problems,
   }

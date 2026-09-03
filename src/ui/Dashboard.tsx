@@ -185,6 +185,49 @@ export function PaceCard({ model, plannedMonthlyJpy, annualRate, onRate }: {
   )
 }
 
+/* ── 这个数字是什么时候的 ───────────────────────────── */
+
+/**
+ * 総資産は日付が一つではない —— 投信は基準価額メールの当日値、それ以外は
+ * CSV を取り込んだ日の値のまま。**混ざっていること自体を書く。**
+ * 片方の日付だけ出すと、そうでない部分まで新しいように読める。
+ */
+function Freshness({ model }: { model: Model }) {
+  const r = model.repriced
+  const snap = model.snapshot
+  if (!snap) return null
+
+  if (r?.pricedOn) {
+    return (
+      <div className="stack" style={{ gap: 4 }}>
+        <div className="small muted">
+          評価額は <b>{ymd(r.pricedOn)}</b> 时点 —— 其中 <b>{pct(r.repricedShare)}</b> 是当天的基準価額，
+          剩下的 {pct(1 - r.repricedShare)}（美股・金・日本股）还停在
+          {r.baseAsOf ? ` ${ymd(r.baseAsOf)}` : '快照'} 的价格。
+        </div>
+        {r.missing.length > 0 && (
+          <div className="small warn">
+            这几只当天没收到基準価額，按快照价算：{r.missing.join('、')}
+          </div>
+        )}
+        {r.ambiguous.length > 0 && (
+          <div className="small bad">
+            名字对不上，没敢用这些价格（宁可停在快照价，也不能安错）：{r.ambiguous.join('、')}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <div className="small muted">
+      {snap.asOf
+        ? <>評価額は {ymd(snap.asOf)} 时点 —— <b>全部</b>停在这一天，还没有日次的基準価額</>
+        : <span className="warn">CSV のファイル名から取得日を読めませんでした — 評価額がいつのものか不明です</span>}
+    </div>
+  )
+}
+
 /* ── 资产 ───────────────────────────────────────────── */
 
 export function AssetsCard({ model, goalJpy }: { model: Model; goalJpy: number }) {
@@ -224,14 +267,7 @@ export function AssetsCard({ model, goalJpy }: { model: Model; goalJpy: number }
           </tr>
         </tbody>
       </table>
-      {snap && (
-        <div className="small muted">
-          {snap.asOf
-            ? <>評価額は {snap.asOf.replace(/-/g, '/')} 时点</>
-            : <span className="warn">CSV のファイル名から取得日を読めませんでした — 評価額がいつのものか不明です</span>}
-          {model.staleShare > 0 && <>（其中 {pct(model.staleShare)} 是无法追踪价格的金和日本股，只能停在这一天）</>}
-        </div>
-      )}
+      {snap && <Freshness model={model} />}
     </div>
   )
 }

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { type Dataset, buildModel, isEmptyDataset } from './domain/model'
+import { type Dataset, EMPTY_DATASET, buildModel, isEmptyDataset } from './domain/model'
 import {
   type FileKind, type RawFile, type Store, EMPTY, datasetOf, load, loadToken, newId,
   save, saveToken, withDataset, withImport,
@@ -135,9 +135,7 @@ export function App() {
           onUpload={() => { setAskMigrate(false); void push(dataset) }}
           onStartFresh={() => {
             setAskMigrate(false)
-            update((prev) => ({ ...withDataset(prev, {
-              snapshot: null, txns: [], entries: [], valuePoints: [], problems: [],
-            }), files: {} }))
+            update((prev) => ({ ...withDataset(prev, EMPTY_DATASET), files: {} }))
           }}
         />
       )}

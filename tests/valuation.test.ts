@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { parseSnapshot } from '../src/domain/holdings'
-import { categoryTotals, nisaUsage, staleShare } from '../src/domain/valuation'
+import { categoryTotals, nisaUsage } from '../src/domain/valuation'
 import { SNAPSHOT_FILE, snapshotCsv } from './fixtures'
 
 const snap = parseSnapshot(snapshotCsv(), SNAPSHOT_FILE)
@@ -15,8 +15,10 @@ describe('分類の集計', () => {
     expect(by['外貨建MMF']).toBe(5_240)
   })
 
-  it('日次で追えない割合は 19.9%（金 14.9% + 国内株 5.0%）', () => {
-    expect(staleShare(snap)).toBeCloseTo(0.199, 3)
+  it('基準価額が来ていなければ、どの種別も「当日値」を名乗らない', () => {
+    // 以前は 投資信託・米国株式・外貨建MMF を live と決め打ちしていた。実装が
+    // あるのは投信の基準価額メールだけで、他は値段を取る仕組みが無い。
+    expect(categoryTotals(snap).every((c) => !c.livePrice)).toBe(true)
   })
 
   it('NISA 枠は取得価額で数える — 時価で数えると3割過大になる', () => {

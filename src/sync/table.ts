@@ -1,6 +1,7 @@
 import type { Entry } from '../domain/contribution'
 import type { ValuePoint } from '../domain/growth'
 import type { Dataset } from '../domain/model'
+import type { PriceRow } from '../domain/prices'
 import type { Flow, Position, Snapshot, Txn } from '../domain/types'
 
 /**
@@ -23,6 +24,8 @@ export interface Tables {
   positions: Table
   entries: Table
   values: Table
+  /** 基準価額メールから毎日1行ずつ増える。書くのはトリガー、読むのは画面。 */
+  prices: Table
   meta: Table
 }
 
@@ -33,6 +36,7 @@ const COLUMNS = {
     'priceUnit', 'marketValueJpy', 'gainJpy', 'costJpy'] as const,
   entries: ['id', 'on', 'amountJpy', 'note', 'dismissed'] as const,
   values: ['on', 'totalJpy'] as const,
+  prices: ['on', 'fund', 'navJpy'] as const,
   meta: ['key', 'value'] as const,
 }
 
@@ -73,6 +77,7 @@ export function datasetToTables(data: Dataset): Tables {
     positions: toTable(COLUMNS.positions, snap?.positions ?? []),
     entries: toTable(COLUMNS.entries, data.entries.map((e) => ({ ...e, dismissed: e.dismissed ? '1' : '' }))),
     values: toTable(COLUMNS.values, data.valuePoints),
+    prices: toTable(COLUMNS.prices, data.prices),
     meta: toTable(COLUMNS.meta, meta),
   }
 }
@@ -142,5 +147,9 @@ export function tablesToDataset(tables: Partial<Tables>): Dataset {
     .map((r) => ({ on: str(r['on']), totalJpy: num(r['totalJpy']) }))
     .filter((v) => v.on !== '')
 
-  return { snapshot, txns, entries, valuePoints, problems: [] }
+  const prices: PriceRow[] = fromTable(tables.prices)
+    .map((r) => ({ on: str(r['on']), fund: str(r['fund']), navJpy: num(r['navJpy']) }))
+    .filter((p) => p.on !== '' && p.fund !== '' && p.navJpy > 0)
+
+  return { snapshot, txns, entries, valuePoints, prices, problems: [] }
 }
