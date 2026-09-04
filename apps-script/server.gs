@@ -197,43 +197,106 @@ function writeTable(sh, table) {
 function updatePrices() {
   var query = 'subject:基準価額 newer_than:2d'
   var list = Gmail.Users.Messages.list('me', { q: query, maxResults: 5 })
-  if (!list.messages || list.messages.length === 0) return
+  var messages = list.messages || []
+  if (messages.length === 0) return
 
   var rows = []
-  for (var i = 0; i < list.messages.length; i++) {
-    var msg = Gmail.Users.Messages.get('me', list.messages[i].id, { format: 'full' })
+  for (var i = 0; i < messages.length; i++) {
+    var msg = Gmail.Users.Messages.get('me', messages[i].id, { format: 'full' })
     var text = decodeBody(msg.payload)
     var on = parsePriceDate(text) || Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd')
     var found = parsePrices(text)
+    // エディタから手で走らせたときに、どこで落ちたか / 何が取れたかが判るように。
+    console.log((i + 1) + '/' + messages.length + ' 本文 ' + text.length + ' 文字、日付 ' + on + '、' + found.length + ' 件')
+    // 一件も取れなかったときは本文を覗かせる。下の throw だけでは「0 件」としか判らず、
+    // parsePrices を実本文に合わせるのに必要な情報がどこにも残らない。
+    if (found.length === 0) console.log('取れなかった本文の先頭:\n' + text.slice(0, 800))
     for (var j = 0; j < found.length; j++) rows.push([on, found[j].fund, found[j].navJpy])
   }
-  if (rows.length === 0) return
+  // 件名に合うメールが在るのに一件も取れないのは「今日は何も無い」ではなく壊れている。
+  // ここで黙って成功すると、失敗通知という唯一の合図を失う。
+  if (rows.length === 0) {
+    throw new Error(messages.length + ' 通のメールから基準価額を一件も取れませんでした')
+  }
 
   var ss = book()
   var sh = sheetByName(ss, 'prices')
   if (sh.getLastRow() === 0) {
     sh.getRange(1, 1, 1, 3).setValues([['on', 'fund', 'navJpy']])
   }
-  // 同じ日・同じファンドを二度書かない。トリガーは失敗すると再実行される。
+  // 同じ日・同じファンドを二度書かない。トリガーは失敗すると再実行されるし、
+  // newer_than:2d には同じ日の数値を載せたメールが二通入ることもある。
   var seen = {}
   if (sh.getLastRow() > 1) {
     var have = sh.getRange(2, 1, sh.getLastRow() - 1, 2).getValues()
-    for (var k = 0; k < have.length; k++) seen[have[k][0] + ' ' + have[k][1]] = true
+    for (var k = 0; k < have.length; k++) seen[have[k][0] + ' ' + have[k][1]] = true
   }
-  var fresh = rows.filter(function (r) { return !seen[r[0] + ' ' + r[1]] })
+  var fresh = []
+  for (var m = 0; m < rows.length; m++) {
+    var key = rows[m][0] + ' ' + rows[m][1]
+    if (seen[key]) continue
+    seen[key] = true
+    fresh.push(rows[m])
+  }
   if (fresh.length === 0) return
   sh.getRange(sh.getLastRow() + 1, 1, fresh.length, 3).setNumberFormat('@').setValues(fresh)
 }
 
+/**
+ * 本文をテキストで取り出す。
+ *
+ * multipart/alternative は text/plain と text/html の両方を持つ。両方つないで
+ * 読むと同じ値段を二度拾うので、**片方だけ**使う（plain を優先）。
+ */
 function decodeBody(payload) {
-  if (!payload) return ''
-  if (payload.body && payload.body.data) {
-    return Utilities.newBlob(Utilities.base64DecodeWebSafe(payload.body.data)).getDataAsString()
+  var part = pickTextPart(payload, 'text/plain') || pickTextPart(payload, 'text/html')
+  if (!part) return ''
+  return decodePart(part)
+}
+
+function pickTextPart(part, mimeType) {
+  if (!part) return null
+  if (part.mimeType === mimeType && part.body && part.body.data) return part
+  var parts = part.parts || []
+  for (var i = 0; i < parts.length; i++) {
+    var hit = pickTextPart(parts[i], mimeType)
+    if (hit) return hit
   }
-  var parts = payload.parts || []
-  var out = ''
-  for (var i = 0; i < parts.length; i++) out += decodeBody(parts[i])
-  return out
+  return null
+}
+
+/**
+ * ここが 9/3・9/4 に「Could not decode string.」で落ちていた所。落ちうるのは二段階:
+ *
+ *   1. base64。base64DecodeWebSafe は長さが 4 の倍数でないと落ちる。Gmail の
+ *      base64url は普通パディング付きだが、落ちていれば必ずここで死ぬので詰め直す。
+ *   2. 文字コード。日本語のメールは ISO-2022-JP や Shift_JIS のことがあり、
+ *      UTF-8 決め打ちで読むと落ちるか、化けて「基準価額」が見つからなくなる。
+ *      ヘッダの charset に従って読む。
+ */
+function decodePart(part) {
+  var data = String(part.body.data).replace(/\s+/g, '').replace(/\+/g, '-').replace(/\//g, '_')
+  while (data.length % 4 !== 0) data += '='
+  var blob = Utilities.newBlob(Utilities.base64DecodeWebSafe(data))
+  var charset = charsetOf(part)
+  console.log('本文 ' + part.mimeType + ' charset=' + charset)
+  try {
+    return blob.getDataAsString(charset)
+  } catch (err) {
+    if (charset.toUpperCase() === 'UTF-8') throw err
+    console.warn('charset=' + charset + ' で読めないので UTF-8 で読み直す: ' + err)
+    return blob.getDataAsString('UTF-8')
+  }
+}
+
+function charsetOf(part) {
+  var headers = part.headers || []
+  for (var i = 0; i < headers.length; i++) {
+    if (String(headers[i].name).toLowerCase() !== 'content-type') continue
+    var m = /charset\s*=\s*"?([\w-]+)"?/i.exec(headers[i].value || '')
+    if (m) return m[1]
+  }
+  return 'UTF-8'
 }
 
 /** 「・基準価額は08月27日時点の数値を表示しております。」から日付を取る。 */

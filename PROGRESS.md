@@ -17,10 +17,13 @@
 下一步是用户按 [docs/sheet-setup.md](docs/sheet-setup.md) 第 1〜3 段完成配置。
 本地模式不受影响，没配同步就和第 2 阶段一样用。
 
-**Blockers**：`updatePrices`（Apps Script 側のメール解析）が**真実のメールで一度も
-走っていない**。翌朝トリガーが回ったら Sheet の `prices` タブを見る —— 中身があれば
-解析は合っている、空か行が壊れていれば `parsePrices` を実メールに合わせて直す。
-画面側（突き合わせ・付け替え・表示）はテストと実機で確認済み。
+**Blockers**：`updatePrices` 在 9/3、9/4 早上对着真实邮件抛
+`Exception: Could not decode string.` 挂掉了（`prices` 表还是空的）。
+解码那一侧已经修了（[docs/changes/price-mail-decode/tasks.md](docs/changes/price-mail-decode/tasks.md)），
+但**这台机器验证不了**。下一步是**用户在 Apps Script 编辑器里手动跑一次 `updatePrices`**，
+看日志和 `prices` 表 —— 不用等第二天早上的触发器。
+只有到那时才能看到真实邮件正文长什么样，才能把 `parsePrices` 的正则改成对的。
+界面这一侧（对账、替换、显示）已有测试和实机确认。
 
 ---
 
@@ -48,6 +51,28 @@
 ---
 
 ## Completed
+
+### 2026-09-04 · 修掉基準価額邮件解不开码、触发器每天挂掉的问题
+只改了 `apps-script/server.gs`。本地 79 项测试与此无关，未变动。
+
+9/3、9/4 失败通知里的 `Could not decode string.` 只可能出自 `decodeBody` 的一行，
+但**那一行里有两个可能的抛出点，是哪一个只有执行日志能告诉我们**。
+`Utilities.base64DecodeWebSafe` 在长度不是 4 的倍数时会抛（base64url 少了 padding 就会这样）；
+`getDataAsString()` 写死 UTF-8，遇到 ISO-2022-JP 的日文邮件要么抛，
+要么不抛但乱码，导致「基準価額」找不到、静悄悄写 0 行。
+两个都是真 bug，所以没等分辨清楚就一起修了。
+
+顺带发现的另一个 bug：multipart/alternative 的 text/plain 和 text/html **被拼在了一起**，
+同一个价格会被抓两遍。改成只取其中一个（优先 plain），并且在同一次执行内
+也按 `on + fund` 去重。
+
+**匹配到了邮件却一条都解不出来时，直接 throw。** 默默返回成功就会失去失败通知 ——
+而这次正是失败通知把问题暴露出来的。同时把正文开头 800 字打进日志，
+否则「0 件」这个信息不足以让下一次修得动。
+
+**这台机器验证不了。** 本地只写了 Apps Script 的桩，确认了四件事：
+没有 padding 的 base64url 能解、不会重复计价、不会选中附件、charset 失败会退回 UTF-8。
+对真实邮件的确认要等用户手动跑一次。
 
 ### 2026-09-03 · 基準価額を画面につないだ — 投信が「快照日で止まる」のをやめた
 `src/domain/prices.ts` + `valuation.ts` の作り直し + `ui/Dashboard.tsx` の鮮度表示、79 項目。
