@@ -17,11 +17,8 @@
 下一步是用户按 [docs/sheet-setup.md](docs/sheet-setup.md) 第 1〜3 段完成配置。
 本地模式不受影响，没配同步就和第 2 阶段一样用。
 
-**Blockers**：无阻塞。`updatePrices` 的解码与解析都已按真实邮件的形状写好，
-并有 13 项测试（`tests/apps-script.test.ts`）。剩最后一步确认：
-**用户手动跑一次 `updatePrices`**，`prices` 表应出现两天 × 全部基金的行
-（日志只打了 30 行，所以每封里到底几支还没数过）。
-界面这一侧（对账、替换、显示）已有测试和实机确认。
+**Blockers**：无。`updatePrices` 已在真实邮件上跑通 —— 用户 2026-09-04 手动执行成功，
+`prices` 表写入了数据。触发器每天 7:01 自动跑，同一天同一支基金不会重复写。
 
 ---
 
@@ -92,7 +89,9 @@ charset=iso-2022-jp        head=60,33,68,79,67,84,89,80,69,32,72,84,77,76  (= "<
 
 **新增 `tests/apps-script.test.ts`，13 项**：用 Apps Script 的桩把 `.gs` 的纯函数跑起来，
 夹具照抄执行日志里的真实排版。全套 92 项通过（原 79 + 13）。
-解码和解析都对着真实邮件的形状验证过了，剩最后一步：让用户再跑一次，确认真的写进表。
+**并且已在真实邮件上跑通**：用户手动执行 `updatePrices` 成功，`prices` 表写入了数据。
+从 9/3 第一次失败到这里，一共错了两次、猜了三轮 —— 定位过程记在
+[docs/changes/price-mail-decode/tasks.md](docs/changes/price-mail-decode/tasks.md)。
 
 ### 2026-09-03 · 基準価額を画面につないだ — 投信が「快照日で止まる」のをやめた
 `src/domain/prices.ts` + `valuation.ts` の作り直し + `ui/Dashboard.tsx` の鮮度表示、79 項目。
