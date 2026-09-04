@@ -210,7 +210,9 @@ function updatePrices() {
     console.log((i + 1) + '/' + messages.length + ' 本文 ' + text.length + ' 文字、日付 ' + on + '、' + found.length + ' 件')
     // 一件も取れなかったときは本文を覗かせる。下の throw だけでは「0 件」としか判らず、
     // parsePrices を実本文に合わせるのに必要な情報がどこにも残らない。
-    if (found.length === 0) console.log('取れなかった本文の先頭:\n' + text.slice(0, 800))
+    // 生の HTML の先頭を出しても DOCTYPE と CSS しか写らないので、タグを落として
+    // 「基準価額」の周りを出す。
+    if (found.length === 0) console.log(dumpLines(text))
     for (var j = 0; j < found.length; j++) rows.push([on, found[j].fund, found[j].navJpy])
   }
   // 件名に合うメールが在るのに一件も取れないのは「今日は何も無い」ではなく壊れている。
@@ -266,37 +268,22 @@ function pickTextPart(part, mimeType) {
 }
 
 /**
- * ここが 9/3・9/4 に「Could not decode string.」で落ちていた所。落ちうるのは二段階:
+ * 二つとも実測で確かめた。**どちらもヘッダやサンプル通りではない。**
  *
- *   1. base64。base64DecodeWebSafe は長さが 4 の倍数でないと落ちる。Gmail の
- *      base64url は普通パディング付きだが、落ちていれば必ずここで死ぬので詰め直す。
- *   2. 文字コード。日本語のメールは ISO-2022-JP や Shift_JIS のことがあり、
- *      UTF-8 決め打ちで読むと落ちるか、化けて「基準価額」が見つからなくなる。
- *      ヘッダの charset に従って読む。
+ *   1. `body.data` は base64 の文字列ではない。高度なサービス（Gmail.Users...）は
+ *      discovery 上 `format: byte` のこの項目を**バイト配列に復号して**返す
+ *      （typeof=object ctor=Array）。REST を直に叩く前提のサンプルはどれも base64 と
+ *      して書いてあるが、ここでは当てはまらない。9/3 から毎朝
+ *      「Could not decode string.」で落ちていたのはこれ。
+ *
+ *   2. そのバイト列は **UTF-8**。Content-Type は `charset=iso-2022-jp` と言うが、
+ *      それは**元のメール**の話で、バイト配列に直す時点で変換済み。ヘッダを信じて
+ *      iso-2022-jp で読むと、ASCII は通るのに日本語が全部 U+FFFD になる（実測）。
+ *      **だからヘッダの charset は読まない。**
  */
 function decodePart(part) {
-  var data = String(part.body.data).replace(/\s+/g, '').replace(/\+/g, '-').replace(/\//g, '_')
-  while (data.length % 4 !== 0) data += '='
-  var blob = Utilities.newBlob(Utilities.base64DecodeWebSafe(data))
-  var charset = charsetOf(part)
-  console.log('本文 ' + part.mimeType + ' charset=' + charset)
-  try {
-    return blob.getDataAsString(charset)
-  } catch (err) {
-    if (charset.toUpperCase() === 'UTF-8') throw err
-    console.warn('charset=' + charset + ' で読めないので UTF-8 で読み直す: ' + err)
-    return blob.getDataAsString('UTF-8')
-  }
-}
-
-function charsetOf(part) {
-  var headers = part.headers || []
-  for (var i = 0; i < headers.length; i++) {
-    if (String(headers[i].name).toLowerCase() !== 'content-type') continue
-    var m = /charset\s*=\s*"?([\w-]+)"?/i.exec(headers[i].value || '')
-    if (m) return m[1]
-  }
-  return 'UTF-8'
+  console.log('本文 ' + part.mimeType + ' ' + part.body.data.length + ' バイト')
+  return Utilities.newBlob(part.body.data).getDataAsString('UTF-8')
 }
 
 /** 「・基準価額は08月27日時点の数値を表示しております。」から日付を取る。 */
@@ -312,23 +299,93 @@ function parsePriceDate(text) {
 }
 
 /**
- * ファンド名と基準価額の組を拾う。本文は HTML のこともテキストのこともあるので
- * タグを落としてから行単位で見る。取れなかった行は黙って捨てる ——
- * 部分的にでも取れたぶんは日次の価格として役に立つ。
+ * ファンド名と基準価額の組を拾う。
+ *
+ * 実物のメール（2026-09-04 に実行ログで確認）は HTML の表で、タグを落とすと
+ * 1 ファンド 6 行に割れる:
+ *
+ *     HSBC インド・インフラ株式オープン        ← 名前
+ *     (ＨＳＢＣアセットマネジメント)            ← 委託会社
+ *     19,016円                                ← 基準価額。**欲しいのはこれだけ**
+ *     -308円                                  ← 前営業日比（金額）
+ *     (-1.59％)                               ← 前営業日比（率）
+ *     5.45％                                  ← リターン（年率）
+ *
+ * だから **符号の付かない「円」だけの行**を基準価額とみなし、そこから上に遡って
+ * 名前を組み立てる。6 行おきに数えて読むようなことはしない —— ファンドが増減しても、
+ * 間に文が挟まっても壊れないほうがいい。
+ *
+ * 返す名前は「名前 (委託会社)」。画面側の normalizeFund が括弧の中身を落として
+ * CSV と突き合わせる（src/domain/prices.ts）ので、この形で渡すのが前提になっている。
  */
+
+/** 基準価額の行。符号が付かないので、前営業日比の「-308円」と区別できる。 */
+var NAV_LINE = /^([\d,]+)円$/
+/** 委託会社の行。名前の下に括弧だけで入っている。 */
+var COMPANY_LINE = /^[（(].+[）)]$/
+var HAS_LETTER = /[A-Za-z\u3040-\u30ff\u4e00-\u9fff]/
+
 function parsePrices(text) {
-  var flat = text.replace(/<[^>]+>/g, '\n').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&')
-  var lines = flat.split(/\n+/)
+  var lines = textLines(text)
   var out = []
   for (var i = 0; i < lines.length; i++) {
-    var line = lines[i].replace(/　/g, ' ').trim()
-    // 「eMAXIS Slim ... (委託会社) | 38,629円 | ...」形式と、表を分解した形式の両方
-    var m = /^(.+?)\s*[|｜]?\s*([\d,]+)\s*円/.exec(line)
+    var m = NAV_LINE.exec(lines[i])
     if (!m) continue
-    var fund = m[1].replace(/[|｜]/g, '').replace(/\s*\([^)]*\)\s*$/, '').trim()
-    var nav = Number(m[2].replace(/,/g, ''))
-    if (!fund || !nav || fund.length > 120) continue
-    out.push({ fund: fund, navJpy: nav })
+    var nav = Number(m[1].replace(/,/g, ''))
+    var fund = fundNameAbove(lines, i)
+    if (nav && fund) out.push({ fund: fund, navJpy: nav })
   }
   return out
+}
+
+/**
+ * 値段の行から上へ 3 行だけ遡って名前を組み立てる。見出しや注意書きに当たったら
+ * 何も返さない —— **取り違えて付けるくらいなら、付けない。**
+ */
+function fundNameAbove(lines, at) {
+  var company = ''
+  for (var i = at - 1; i >= 0 && i >= at - 3; i--) {
+    var line = lines[i]
+    if (COMPANY_LINE.test(line)) { company = line; continue }
+    if (!HAS_LETTER.test(line)) return ''                 // 数字や記号だけの行
+    if (line === '基準価額' || line.indexOf('ファンド名') === 0) return ''  // 見出し
+    if (line.indexOf('。') >= 0 || line.charAt(0) === '※') return ''        // 注意書き
+    if (line.length > 120) return ''
+    return company ? line + ' ' + company : line
+  }
+  return ''
+}
+
+/**
+ * 一件も取れなかったときに実行ログへ出す。**実行ログはブラウザからコピーできない**ので、
+ * 一画面に収まってスクリーンショットが撮れる形にする —— 空行を潰し、値段らしき行の
+ * 手前 8 行から 30 行だけ、行番号つきで。ここを見て parsePrices を書いた。
+ */
+function dumpLines(text) {
+  var lines = textLines(text)
+  var at = 0
+  for (var j = 0; j < lines.length; j++) {
+    if (/\d,\d{3}/.test(lines[j]) || lines[j].indexOf('基準価額') >= 0) { at = j; break }
+  }
+  var from = Math.max(0, at - 8)
+  var out = ['取れなかった本文（タグ除去・空行なし・' + lines.length + ' 行中 ' + (from + 1) + '〜）:']
+  for (var k = from; k < Math.min(lines.length, from + 30); k++) {
+    out.push((k + 1) + '| ' + lines[k].slice(0, 90))
+  }
+  return out.join('\n')
+}
+
+/** タグと空行を落とした行の並び。parsePrices と dumpLines が同じものを見る。 */
+function textLines(text) {
+  var out = []
+  var all = flatten(text).split(/\n+/)
+  for (var i = 0; i < all.length; i++) {
+    var t = all[i].replace(/　/g, ' ').trim()
+    if (t) out.push(t)
+  }
+  return out
+}
+
+function flatten(text) {
+  return text.replace(/<[^>]+>/g, '\n').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&')
 }

@@ -17,12 +17,10 @@
 下一步是用户按 [docs/sheet-setup.md](docs/sheet-setup.md) 第 1〜3 段完成配置。
 本地模式不受影响，没配同步就和第 2 阶段一样用。
 
-**Blockers**：`updatePrices` 在 9/3、9/4 早上对着真实邮件抛
-`Exception: Could not decode string.` 挂掉了（`prices` 表还是空的）。
-解码那一侧已经修了（[docs/changes/price-mail-decode/tasks.md](docs/changes/price-mail-decode/tasks.md)），
-但**这台机器验证不了**。下一步是**用户在 Apps Script 编辑器里手动跑一次 `updatePrices`**，
-看日志和 `prices` 表 —— 不用等第二天早上的触发器。
-只有到那时才能看到真实邮件正文长什么样，才能把 `parsePrices` 的正则改成对的。
+**Blockers**：无阻塞。`updatePrices` 的解码与解析都已按真实邮件的形状写好，
+并有 13 项测试（`tests/apps-script.test.ts`）。剩最后一步确认：
+**用户手动跑一次 `updatePrices`**，`prices` 表应出现两天 × 全部基金的行
+（日志只打了 30 行，所以每封里到底几支还没数过）。
 界面这一侧（对账、替换、显示）已有测试和实机确认。
 
 ---
@@ -41,7 +39,7 @@
 - [x] spike：跨域调用 Apps Script 的传输层验证（`text/plain` 通、`application/json` 不通）
 - [x] Google Sheet 读写（经 Apps Script，Sheet 设为「仅自己」，令牌鉴权）
 - [x] 存储格式 v1→v2 迁移（手动记录和实测点不丢）
-- [x] Apps Script 日次触发器：基準価額メール → prices 表（**解析はまだ実メール未検証**）
+- [x] Apps Script 日次触发器：基準価額メール → prices 表（解码与解析已按真实邮件写好，13 项测试）
 - [x] prices を画面につなぐ（投信の評価額を日次の基準価額で付け替え）
 - [x] 投入记录与月度进度环
 - [x] 成長グラフ（累计投入の線 + 実測値の点 + 1億までの見通し）
@@ -52,27 +50,49 @@
 
 ## Completed
 
-### 2026-09-04 · 修掉基準価額邮件解不开码、触发器每天挂掉的问题
+### 2026-09-04 · 基準価額邮件：`body.data` 根本不是 base64
 只改了 `apps-script/server.gs`。本地 79 项测试与此无关，未变动。
 
-9/3、9/4 失败通知里的 `Could not decode string.` 只可能出自 `decodeBody` 的一行，
-但**那一行里有两个可能的抛出点，是哪一个只有执行日志能告诉我们**。
-`Utilities.base64DecodeWebSafe` 在长度不是 4 的倍数时会抛（base64url 少了 padding 就会这样）；
-`getDataAsString()` 写死 UTF-8，遇到 ISO-2022-JP 的日文邮件要么抛，
-要么不抛但乱码，导致「基準価額」找不到、静悄悄写 0 行。
-两个都是真 bug，所以没等分辨清楚就一起修了。
+9/3、9/4 每天早上 `Exception: Could not decode string.`。**我先猜错了两次**
+（base64 少 padding、字符编码），第一次修完让用户手动跑，还是同样的异常，
+但这次堆栈指到了具体行，而且异常之前的 `console.log` 一行都没打出来 ——
+范围收死到 `Utilities.base64DecodeWebSafe` 这一句。
 
-顺带发现的另一个 bug：multipart/alternative 的 text/plain 和 text/html **被拼在了一起**，
-同一个价格会被抓两遍。改成只取其中一个（优先 plain），并且在同一次执行内
-也按 `on + fund` 去重。
+于是不再猜，让用户跑了个只打印不写表的诊断函数。真相：
 
-**匹配到了邮件却一条都解不出来时，直接 throw。** 默默返回成功就会失去失败通知 ——
-而这次正是失败通知把问题暴露出来的。同时把正文开头 800 字打进日志，
-否则「0 件」这个信息不足以让下一次修得动。
+```
+typeof=object ctor=Array   length=6562
+charset=iso-2022-jp        head=60,33,68,79,67,84,89,80,69,32,72,84,77,76  (= "<!DOCTYPE HTML")
+```
 
-**这台机器验证不了。** 本地只写了 Apps Script 的桩，确认了四件事：
-没有 padding 的 base64url 能解、不会重复计价、不会选中附件、charset 失败会退回 UTF-8。
-对真实邮件的确认要等用户手动跑一次。
+**高级服务（`Gmail.Users...`）会把 discovery 里 `format: byte` 的 `body.data`
+预先解成字节数组**，它不是 base64 字符串。网上的示例都是按直接调 REST 写的，在这里不成立。
+`String(d)` 把数组揉成 `"60,33,68,..."`，再拿去 base64 解码 —— 必挂。
+正确写法只有一句：`Utilities.newBlob(part.body.data).getDataAsString(charset)`。
+
+**字符编码那一半也猜错了，而且方向是反的。** 按 header 的 `iso-2022-jp` 解，
+日志里 ASCII 全好、日文全成 U+FFFD（`20,031���`）—— header 的 charset 说的是
+**原始邮件**，字节列在转成数组时已经是 UTF-8 了。五种编码并排打印后确认 UTF-8 正确，
+`charsetOf` 整个删掉：它不是不够，是会主动骗人。
+
+**`parsePrices` 按真实排版重写了。** 原来的正则假设「名字和价格在同一行」，
+真实邮件是 HTML 表格，去标签后每支基金 6 行：名称 / 委託会社 / 基準価額 /
+前营业日比 / 比率 / 年率。关键区分点是**基準価額不带符号，前营业日比带 `+`/`-`**，
+所以用 `/^([\d,]+)円$/` 锚定整行就分得开，不用数行数 —— 基金增减、中间插文案都不会坏。
+名字向上回溯 3 行、遇括号行当委託会社，拼成 `名前 (委託会社)` ——
+正是 `src/domain/prices.ts` 的 `normalizeFund` 期待的形状。
+碰到表头或注意书就放弃这条，**宁可不取也不能取错**。
+
+顺带修的：`multipart/alternative` 的 plain 和 html 原来被拼在一起，同一个价格抓两遍；
+现在只取一份，同一次执行内也按 `on + fund` 去重。
+
+**匹配到邮件却一条都没解出来时直接 throw**，并打印 `dumpLines()`：去标签、去空行、
+带行号的 30 行。执行日志在浏览器里复制不出来，所以输出必须能一屏截图 ——
+这一条是被实际卡住之后才改对的。默默成功会失去失败通知，这次全靠它。
+
+**新增 `tests/apps-script.test.ts`，13 项**：用 Apps Script 的桩把 `.gs` 的纯函数跑起来，
+夹具照抄执行日志里的真实排版。全套 92 项通过（原 79 + 13）。
+解码和解析都对着真实邮件的形状验证过了，剩最后一步：让用户再跑一次，确认真的写进表。
 
 ### 2026-09-03 · 基準価額を画面につないだ — 投信が「快照日で止まる」のをやめた
 `src/domain/prices.ts` + `valuation.ts` の作り直し + `ui/Dashboard.tsx` の鮮度表示、79 項目。
